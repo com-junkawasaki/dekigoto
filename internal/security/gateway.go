@@ -3,9 +3,11 @@ package security
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -132,7 +134,9 @@ func (sg *SecurityGateway) Stop() {
 	if sg.server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		sg.server.Shutdown(ctx)
+		if err := sg.server.Shutdown(ctx); err != nil {
+			log.Printf("SecurityGateway server shutdown error: %v", err)
+		}
 	}
 
 	close(sg.auditStream)
@@ -216,13 +220,22 @@ func (sg *SecurityGateway) configureMTLS() (*tls.Config, error) {
 	cert, err := tls.LoadX509KeyPair("certs/server.crt", "certs/server.key")
 	if err != nil {
 		// For MVP, create self-signed cert if not found
-		log.Println("MTLS certificates not found, using insecure config for MVP")
-		return &tls.Config{InsecureSkipVerify: true}, nil
+		log.Println("MTLS certificates not found, mTLS setup failed")
+		return nil, fmt.Errorf("failed to load mTLS certificates: %w", err)
 	}
+
+	caCert, err := os.ReadFile("certs/server.crt")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CA certificate: %w", err)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
 
 	return &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		ClientAuth:   tls.RequireAndVerifyClientCert,
+		MinVersion:   tls.VersionTLS12,
+		ClientCAs:    caCertPool,
 	}, nil
 }
 
@@ -281,11 +294,15 @@ func (sg *SecurityGateway) handleValidateToken(w http.ResponseWriter, r *http.Re
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Token valid"))
+	if _, err := w.Write([]byte("Token valid")); err != nil {
+		log.Printf("Error writing response: %v", err)
+	}
 }
 
 // handleHealth handles health check requests
 func (sg *SecurityGateway) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	if _, err := w.Write([]byte("OK")); err != nil {
+		log.Printf("Error writing health check response: %v", err)
+	}
 }

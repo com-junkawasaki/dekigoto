@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -96,7 +97,8 @@ type LoggingConfig struct {
 
 // Load loads configuration from a YAML file
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	cleanedPath := filepath.Clean(path)
+	data, err := os.ReadFile(cleanedPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -106,21 +108,20 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	// Convert duration strings to time.Duration
-	if cfg.EventStore.RetentionPeriod, err = parseDuration(cfg.EventStore.RetentionPeriod); err != nil {
-		return nil, fmt.Errorf("invalid retention_period: %w", err)
-	}
+	// Durations are now parsed directly from string format (e.g., "10s") by yaml.v3
+	// The manual multiplication is no longer needed.
+	/*
+		cfg.Projection.LateWindowMs *= time.Millisecond
+		cfg.Projection.WatermarkLagMs *= time.Millisecond
+		cfg.Projection.MaxRebuildTimeSec *= time.Second
 
-	cfg.Projection.LateWindowMs *= time.Millisecond
-	cfg.Projection.WatermarkLagMs *= time.Millisecond
-	cfg.Projection.MaxRebuildTimeSec *= time.Second
+		cfg.Query.QueryTimeoutSec *= time.Second
 
-	cfg.Query.QueryTimeoutSec *= time.Second
+		cfg.Control.MetricsIntervalSec *= time.Second
+		cfg.Control.ScalingCheckIntervalSec *= time.Second
 
-	cfg.Control.MetricsIntervalSec *= time.Second
-	cfg.Control.ScalingCheckIntervalSec *= time.Second
-
-	cfg.Monitoring.HealthCheckIntervalSec *= time.Second
+		cfg.Monitoring.HealthCheckIntervalSec *= time.Second
+	*/
 
 	return &cfg, nil
 }

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/tursodatabase/libsql-client-go/libsql"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 

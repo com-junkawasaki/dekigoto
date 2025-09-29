@@ -15,37 +15,49 @@ ActorDB provides:
 
 ## Architecture
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Query Interface │    │ Projection DSL  │    │  Control Plane  │
-│   (SQL Dialect)  │    │  (IVM Engine)   │    │  (Auto-scaling) │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                        │                        │
-         └────────────────────────┼────────────────────────┘
-                                  │
-                    ┌─────────────────┐
-                    │ Security Gateway│
-                    │ (mTLS + JWS +  │
-                    │     ABAC)      │
-                    └─────────────────┘
-                              │
-                    ┌─────────────────┐
-                    │   Event Store   │
-                    │ (Multi-backend │
-                    │  Storage)       │
-                    └─────────────────┘
-                              │
-                    ┌─────────────────┐
-                    │  Storage Layer  │
-                    │ • Memory        │
-                    │ • SQLite        │
-                    │ • PostgreSQL    │
-                    │ • RocksDB*      │
-                    │ • LevelDB*      │
-                    └─────────────────┘
+```mermaid
+graph TD
+    subgraph "Client Layer"
+        QI[Query Interface]
+        CLI[TypeScript Client]
+    end
+
+    subgraph "Processing Layer"
+        SEC[Security Gateway]
+        PROC[Projection Engine]
+        CP[Control Plane]
+        CAT[Catalog Service]
+    end
+
+    subgraph "Storage Layer"
+        ES[EventStore]
+        STO[Pluggable Storage]
+    end
+
+    CLI --"gRPC/HTTP"--> QI
+    QI --"SQL-like Queries"--> PROC
+    QI --"Token Validation"--> SEC
+
+    PROC --"Subscribes to Events"--> ES
+    PROC --"Reads Projection Defs"--> CAT
+    
+    SEC --"Manages Policies"--> CAT
+    
+    CP --"Monitors & Controls"--> ES
+    CP --"Monitors & Controls"--> PROC
+    CP --"Monitors & Controls"--> SEC
+
+    ES --"Persists Events to"--> STO
+
+    style QI fill:#f9f,stroke:#333,stroke-width:2px
+    style PROC fill:#ccf,stroke:#333,stroke-width:2px
+    style ES fill:#cfc,stroke:#333,stroke-width:2px
+    style SEC fill:#f99,stroke:#333,stroke-width:2px
+    style CP fill:#fcf,stroke:#333,stroke-width:2px
 ```
 
 *Requires separate build with tags
+**SQLite-compatible with remote capabilities
 
 ## Core Components
 
@@ -55,6 +67,7 @@ ActorDB provides:
   - **Memory**: In-memory storage for testing/development
   - **SQLite**: Embedded database for single-node deployments
   - **PostgreSQL**: Production-grade RDBMS with advanced features
+  - **libSQL**: SQLite-compatible with remote capabilities ([turso.tech/libsql](https://turso.tech/libsql))
   - **RocksDB**: High-performance KV store (requires `go build -tags rocksdb`)
   - **LevelDB**: Alternative KV store (requires `go build -tags leveldb`)
 - Snapshot management with configurable retention
@@ -110,9 +123,9 @@ Configure your preferred storage backend in `config/example.yaml`:
 ```yaml
 eventstore:
   storage:
-    type: "sqlite"  # memory, sqlite, postgresql, rocksdb, leveldb
+    type: "libsql"  # memory, sqlite, postgresql, libsql, rocksdb, leveldb
     path: "/data/actordb/events.db"  # For SQLite/RocksDB/LevelDB
-    connection_string: "host=localhost port=5432 user=actordb dbname=actordb sslmode=disable"  # For PostgreSQL
+    connection_string: "libsql://your-database.turso.io"  # For libSQL/PostgreSQL remote
     options:
       max_connections: 25  # Additional options
 ```
@@ -180,10 +193,12 @@ Use the provided build script:
 ./build.sh --all
 
 # Build specific storage backend
+./build.sh --libsql
 ./build.sh --rocksdb
 ./build.sh --leveldb
 
 # Run built binaries
+./bin/actordb-libsql --config config/example.yaml
 ./bin/actordb-rocksdb --config config/example.yaml
 ./bin/actordb-leveldb --config config/example.yaml
 ```
@@ -191,6 +206,9 @@ Use the provided build script:
 ### Manual Build
 
 ```bash
+# libSQL (no C dependencies required)
+go build -o actordb-libsql ./cmd/actordb
+
 # RocksDB
 CGO_CFLAGS="-I/opt/homebrew/include" CGO_LDFLAGS="-L/opt/homebrew/lib -lrocksdb -lz -lbz2 -lsnappy -llz4 -lzstd" \
 go build -tags rocksdb -o actordb-rocksdb ./cmd/actordb

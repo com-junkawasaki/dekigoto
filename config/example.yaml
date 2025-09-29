@@ -13,13 +13,15 @@ cluster:
 eventstore:
   data_dir: "/data/actordb/events"
   snapshot_interval: 100000  # events
-  retention_period: "30d"
+  retention_period: "720h" # 30d
   compression: "parquet"  # or "protobuf"
   max_concurrent_writes: 1000
   storage:
     type: "memory"  # memory, sqlite, postgresql, libsql, rocksdb, leveldb
     path: "/data/actordb/storage"
-    connection_string: "host=localhost port=5432 user=actordb dbname=actordb sslmode=disable"
+    # For production, use "verify-full" and configure certificates.
+    # Secrets like passwords should be managed outside this file (e.g., via environment variables or a secret store).
+    connection_string: "host=localhost port=5432 user=actordb dbname=actordb sslmode=verify-full"
     options:
       max_connections: 25
 
@@ -29,9 +31,9 @@ projection:
   max_memory_mb: 4096
   auto_promote_qps_threshold: 2.0
   auto_demote_qps_threshold: 0.2
-  late_window_ms: 60000
-  watermark_lag_ms: 2000
-  max_rebuild_time_sec: 30
+  late_window_ms: "60s" # 60000
+  watermark_lag_ms: "2s" # 2000
+  max_rebuild_time_sec: "30s" # 30
 
 # Security Configuration
 security:
@@ -45,20 +47,20 @@ security:
 query:
   listen_addr: ":9090"
   max_connections: 1000
-  query_timeout_sec: 30
+  query_timeout_sec: "30s" # 30
   enable_sql_dialect: true
 
 # Control Plane Configuration
 control:
   listen_addr: ":8080"
-  metrics_interval_sec: 10
-  scaling_check_interval_sec: 60
+  metrics_interval_sec: "10s" # 10
+  scaling_check_interval_sec: "60s" # 60
   max_hot_key_rho: 0.7
 
 # Monitoring
 monitoring:
   prometheus_addr: ":9091"
-  health_check_interval_sec: 30
+  health_check_interval_sec: "30s" # 30
 
 # Logging
 logging:

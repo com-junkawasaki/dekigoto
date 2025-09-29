@@ -86,6 +86,7 @@ type ProjectionEngine struct {
 	definitions   map[string]*ProjectionDefinition
 	definitionsMu sync.RWMutex
 	workers       []*Worker
+	eventChannel  chan eventstore.Event // Channel to receive events from EventStore
 	running       bool
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -137,6 +138,9 @@ func New(cfg config.ProjectionConfig, es *eventstore.EventStore) (*ProjectionEng
 func (pe *ProjectionEngine) Start(ctx context.Context) error {
 	pe.running = true
 
+	// Subscribe to the event store to receive real-time events.
+	pe.eventChannel = pe.eventstore.Subscribe()
+
 	// Start workers
 	for _, worker := range pe.workers {
 		go worker.run()
@@ -159,6 +163,11 @@ func (pe *ProjectionEngine) Stop() {
 		if worker.running {
 			close(worker.queue)
 		}
+	}
+
+	// Unsubscribe from the event store to release resources.
+	if pe.eventChannel != nil {
+		pe.eventstore.Unsubscribe(pe.eventChannel)
 	}
 
 	log.Println("ProjectionEngine stopped")
@@ -226,19 +235,18 @@ func (pe *ProjectionEngine) Query(ctx context.Context, projectionName string, pa
 
 // subscribeToEvents subscribes to eventstore events and routes them to workers
 func (pe *ProjectionEngine) subscribeToEvents() {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
+	log.Println("ProjectionEngine is now listening for events from EventStore...")
 	for {
 		select {
 		case <-pe.ctx.Done():
+			log.Println("Stopping event subscription.")
 			return
-		case <-ticker.C:
-			// Poll for new events (MVP: simple polling)
-			events := pe.eventstore.GetAllEvents()
-			for _, event := range events {
-				pe.routeEvent(event)
+		case event, ok := <-pe.eventChannel:
+			if !ok {
+				log.Println("Event channel closed, stopping subscription.")
+				return
 			}
+			pe.routeEvent(event)
 		}
 	}
 }

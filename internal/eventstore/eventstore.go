@@ -48,13 +48,15 @@ type WriteResult struct {
 // Outputs: [event_stream]
 // SLO: p99_latency_100ms
 type EventStore struct {
-	config   config.EventStoreConfig
-	storage  Storage
-	actors   map[string]*ActorState
-	actorsMu sync.RWMutex
-	running  bool
-	ctx      context.Context
-	cancel   context.CancelFunc
+	config        config.EventStoreConfig
+	storage       Storage
+	actors        map[string]*ActorState
+	actorsMu      sync.RWMutex
+	running       bool
+	ctx           context.Context
+	cancel        context.CancelFunc
+	subscribers   map[chan Event]struct{}
+	subscribersMu sync.RWMutex
 }
 
 // New creates a new EventStore instance
@@ -76,12 +78,13 @@ func New(cfg config.EventStoreConfig) (*EventStore, error) {
 	}
 
 	es := &EventStore{
-		config:  cfg,
-		storage: storage,
-		actors:  make(map[string]*ActorState),
-		running: false,
-		ctx:     ctx,
-		cancel:  cancel,
+		config:      cfg,
+		storage:     storage,
+		actors:      make(map[string]*ActorState),
+		running:     false,
+		ctx:         ctx,
+		cancel:      cancel,
+		subscribers: make(map[chan Event]struct{}),
 	}
 
 	return es, nil
@@ -171,6 +174,9 @@ func (es *EventStore) WriteEvent(ctx context.Context, event Event) (*WriteResult
 		Success:     true,
 	}
 
+	// Broadcast the event to all subscribers
+	es.broadcastEvent(event)
+
 	return result, nil
 }
 
@@ -233,6 +239,44 @@ func (es *EventStore) createSnapshot(aggregateID string, sequence int64) error {
 
 	log.Printf("Created snapshot for actor %s at sequence %d", aggregateID, sequence)
 	return nil
+}
+
+// Subscribe adds a new event listener.
+// It returns a channel that will receive events.
+func (es *EventStore) Subscribe() chan Event {
+	es.subscribersMu.Lock()
+	defer es.subscribersMu.Unlock()
+
+	// Use a buffered channel to prevent blocking the event store if a subscriber is slow.
+	ch := make(chan Event, 1000)
+	es.subscribers[ch] = struct{}{}
+	log.Println("New subscriber added to EventStore")
+	return ch
+}
+
+// Unsubscribe removes an event listener.
+func (es *EventStore) Unsubscribe(ch chan Event) {
+	es.subscribersMu.Lock()
+	defer es.subscribersMu.Unlock()
+
+	delete(es.subscribers, ch)
+	log.Println("Subscriber removed from EventStore")
+}
+
+// broadcastEvent sends an event to all subscribers.
+func (es *EventStore) broadcastEvent(event Event) {
+	es.subscribersMu.RLock()
+	defer es.subscribersMu.RUnlock()
+
+	for ch := range es.subscribers {
+		select {
+		case ch <- event:
+		// Non-blocking send
+		default:
+			// This helps detect slow consumers without blocking the write path.
+			log.Printf("Subscriber channel full. Dropping event for a subscriber.")
+		}
+	}
 }
 
 // GetAllEvents returns all events (for testing/debugging)
