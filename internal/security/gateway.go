@@ -215,13 +215,15 @@ func (sg *SecurityGateway) ValidateToken(ctx context.Context, tokenString string
 	return result, nil
 }
 
-// CheckPermission checks if a security context has permission for an action
-func (sg *SecurityGateway) CheckPermission(ctx *SecurityContext, permission string) bool {
+// CheckPermission checks if a security context has permission for an action on a resource
+func (sg *SecurityGateway) CheckPermission(ctx *SecurityContext, resource string, action string) bool {
 	// In production: Use a proper policy engine like OPA
+	permission := fmt.Sprintf("%s:%s", resource, action)
+
 	for _, role := range ctx.Roles {
 		if permissions, ok := sg.policy[role]; ok {
 			for _, p := range permissions {
-				if p == permission {
+				if p == permission || p == "admin" {
 					return true
 				}
 			}

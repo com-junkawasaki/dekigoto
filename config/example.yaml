@@ -17,7 +17,7 @@ eventstore:
   compression: "parquet"  # or "protobuf"
   max_concurrent_writes: 1000
   storage:
-    type: "memory"  # memory, sqlite, postgresql, libsql, rocksdb, leveldb
+    type: "libsql"  # memory, sqlite, postgresql, libsql, rocksdb, leveldb
     path: "/data/actordb/storage"
     # For production, use "verify-full" and configure certificates.
     # Secrets like passwords should be managed outside this file (e.g., via environment variables or a secret store).

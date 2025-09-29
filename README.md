@@ -3,6 +3,8 @@
 ![ActorDB Logo](resources/zatsudan_kaiwa_roujin_kodomo.png)
 *Logo illustration by [irasutoya](https://www.irasutoya.com/2015/08/blog-post_33.html)*
 
+[![DOI](https://zenodo.org/badge/1066271852.svg)](https://doi.org/10.5281/zenodo.17224266)
+
 **ActorDB** is a novel database model that combines **single-writer actor serialization**, **incremental view maintenance (IVM)**, and **zero-trust messaging** into a unified database experience.
 
 ## Overview
@@ -124,19 +126,79 @@ This project follows a **Merkle DAG-based process network model** defined in `da
 ## Quick Start
 
 ```bash
-# Build
-go build -o actordb ./cmd/actordb
+# Build Go implementation (default variant)
+./build.sh go
 
 # Run with example configuration
-./actordb -config config/example.yaml
-
-# Generate test JWT token
-./actordb --generate-token
+./bin/go/actordb-default --config config/example.yaml
 ```
 
-### Security Testing
+## Implementations
 
-ActorDB includes comprehensive security testing capabilities:
+This project contains two implementations of ActorDB:
+
+- **`impl/go`**: The original implementation in Go.
+- **`impl/rust`**: A newer, performance-focused implementation in Rust.
+
+Both implementations share the same configuration files (`config/`), client libraries (`client/`), and process model (`dag.jsonnet`).
+
+## Building ActorDB
+
+Use the `build.sh` script to build the desired implementation.
+
+### Building the Go Implementation
+
+The Go implementation supports multiple storage backends.
+
+```bash
+# Build all Go variants
+./build.sh go --all
+
+# Build a specific storage backend (e.g., rocksdb)
+./build.sh go --rocksdb
+
+# The built binaries will be in ./bin/go/
+./bin/go/actordb-rocksdb --config config/example.yaml
+```
+
+**Manual Go Build:**
+
+To build manually, navigate to the Go directory:
+```bash
+cd impl/go
+
+# Build libSQL variant
+go build -o ../../bin/go/actordb-libsql ./cmd/actordb
+
+# Build RocksDB variant
+CGO_CFLAGS="-I/opt/homebrew/include" CGO_LDFLAGS="-L/opt/homebrew/lib -lrocksdb -lz -lbz2 -lsnappy -llz4 -lzstd" \
+go build -tags rocksdb -o ../../bin/go/actordb-rocksdb ./cmd/actordb
+
+cd ../..
+```
+
+### Building the Rust Implementation
+
+```bash
+# Build the Rust implementation
+./build.sh rust
+
+# The built binary will be in ./bin/rust/
+./bin/rust/actordb --config config/example.yaml
+```
+
+**Manual Rust Build:**
+```bash
+cd impl/rust
+cargo build --release
+cp target/release/dekigoto ../../bin/rust/actordb
+cd ../..
+```
+
+
+## Security Testing (Go)
+
+ActorDB includes comprehensive security testing capabilities for the Go implementation:
 
 #### Automated Security Scans
 
@@ -266,9 +328,9 @@ console.log(result.data);
 
 See `client/typescript/README.md` for detailed documentation.
 
-## C Library Dependencies
+## C Library Dependencies (for Go build)
 
-For RocksDB and LevelDB storage backends, you need to install the corresponding C libraries:
+For RocksDB and LevelDB storage backends in the Go implementation, you need to install the corresponding C libraries:
 
 ### macOS (Homebrew)
 
@@ -286,40 +348,6 @@ sudo apt-get install librocksdb-dev libleveldb-dev
 
 ```bash
 sudo yum install rocksdb-devel leveldb-devel
-```
-
-### Build with C Libraries
-
-Use the provided build script:
-
-```bash
-# Build all variants
-./build.sh --all
-
-# Build specific storage backend
-./build.sh --libsql
-./build.sh --rocksdb
-./build.sh --leveldb
-
-# Run built binaries
-./bin/actordb-libsql --config config/example.yaml
-./bin/actordb-rocksdb --config config/example.yaml
-./bin/actordb-leveldb --config config/example.yaml
-```
-
-### Manual Build
-
-```bash
-# libSQL (no C dependencies required)
-go build -o actordb-libsql ./cmd/actordb
-
-# RocksDB
-CGO_CFLAGS="-I/opt/homebrew/include" CGO_LDFLAGS="-L/opt/homebrew/lib -lrocksdb -lz -lbz2 -lsnappy -llz4 -lzstd" \
-go build -tags rocksdb -o actordb-rocksdb ./cmd/actordb
-
-# LevelDB
-CGO_CFLAGS="-I/opt/homebrew/include" CGO_LDFLAGS="-L/opt/homebrew/lib -lleveldb -lz -lbz2 -lsnappy -llz4 -lzstd" \
-go build -tags leveldb -o actordb-leveldb ./cmd/actordb
 ```
 
 ## MVP Validation Criteria

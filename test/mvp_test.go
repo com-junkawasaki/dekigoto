@@ -174,8 +174,14 @@ func TestMVPSecurity(t *testing.T) {
 	}
 	defer sg.Stop()
 
+	// Generate a test JWT token
+	tokenString, err := sg.GenerateTestToken("test-user", "test-tenant", []string{"user", "admin"}, []string{"read", "write"})
+	if err != nil {
+		t.Fatalf("Failed to generate test token: %v", err)
+	}
+
 	// Test token validation
-	result, err := sg.ValidateToken(context.Background(), "valid-token")
+	result, err := sg.ValidateToken(context.Background(), tokenString)
 	if err != nil {
 		t.Fatalf("Token validation error: %v", err)
 	}
