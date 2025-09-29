@@ -2,13 +2,13 @@ package query
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
+	"sync"
 	"time"
 
-	"github.com/junkawasaki/actordb-dokigoto/internal/projector"
+	"github.com/junkawasaki/actordb-dokigoto/internal/eventstore"
 	"github.com/junkawasaki/actordb-dokigoto/internal/security"
 	"github.com/junkawasaki/actordb-dokigoto/pkg/config"
 )
@@ -29,44 +29,43 @@ type QueryResponse struct {
 	Error     string        `json:"error,omitempty"`
 }
 
-// QueryInterface provides SQL-like query interface with transparent RLS
+// QueryInterface provides a query interface for projections
 // Process Network Node: query_interface
 // Dependencies: [projection_engine, catalog_service]
 // Outputs: [query_results]
 // SLO: query_p99_100ms
 type QueryInterface struct {
-	config    config.QueryConfig
-	projector *projector.ProjectionEngine
-	security  *security.SecurityGateway
-	server    *http.Server
-	running   bool
-	ctx       context.Context
-	cancel    context.CancelFunc
+	config     config.QueryConfig
+	eventStore *eventstore.EventStore
+	secGateway *security.SecurityGateway
+	server     *http.Server
+	running    bool
+	mu         sync.Mutex
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
-// New creates a new QueryInterface
-func New(cfg config.QueryConfig, proj *projector.ProjectionEngine, sec *security.SecurityGateway) (*QueryInterface, error) {
+// NewQueryInterface creates a new QueryInterface
+func NewQueryInterface(cfg config.QueryConfig, es *eventstore.EventStore, sg *security.SecurityGateway) *QueryInterface {
 	ctx, cancel := context.WithCancel(context.Background())
-
-	qi := &QueryInterface{
-		config:    cfg,
-		projector: proj,
-		security:  sec,
-		running:   false,
-		ctx:       ctx,
-		cancel:    cancel,
+	return &QueryInterface{
+		config:     cfg,
+		eventStore: es,
+		secGateway: sg,
+		running:    false,
+		ctx:        ctx,
+		cancel:     cancel,
 	}
-
-	return qi, nil
 }
 
-// Start begins the QueryInterface operation
+// Start begins query interface operation
 func (qi *QueryInterface) Start(ctx context.Context) error {
 	qi.running = true
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/query", qi.handleQuery)
 	mux.HandleFunc("/health", qi.handleHealth)
+	mux.HandleFunc("/query", qi.handleQuery) // Existing query endpoint
+	mux.HandleFunc("/query/admin", qi.authMiddleware(qi.handleAdminQuery))
 
 	qi.server = &http.Server{
 		Addr:         qi.config.ListenAddr,
@@ -100,166 +99,42 @@ func (qi *QueryInterface) Stop() {
 	log.Println("QueryInterface stopped")
 }
 
-// ExecuteQuery executes a query with security context
-func (qi *QueryInterface) ExecuteQuery(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
-	if !qi.running {
-		return nil, fmt.Errorf("query interface not running")
-	}
-
-	start := time.Now()
-
-	// Parse SQL-like query
-	projectionName, err := qi.parseSQL(req.SQL)
-	if err != nil {
-		return &QueryResponse{
-			Error:   err.Error(),
-			Latency: time.Since(start),
-		}, nil
-	}
-
-	// Execute projection query
-	result, err := qi.projector.Query(ctx, projectionName, req.Parameters)
-	if err != nil {
-		return &QueryResponse{
-			Error:   err.Error(),
-			Latency: time.Since(start),
-		}, nil
-	}
-
-	// Apply RLS if security context is provided
-	if req.SecurityCtx != nil {
-		// Get projection definition to check RLS rules
-		filteredData, err := qi.applySecurityFiltering(req.SecurityCtx, result.Data)
-		if err != nil {
-			return &QueryResponse{
-				Error:   fmt.Sprintf("Security filtering failed: %v", err),
-				Latency: time.Since(start),
-			}, nil
-		}
-		result.Data = filteredData
-	}
-
-	response := &QueryResponse{
-		Data:      result.Data,
-		Source:    result.Source,
-		Latency:   time.Since(start),
-		Timestamp: result.Timestamp,
-	}
-
-	return response, nil
-}
-
-// parseSQL parses a simple SQL-like query to extract projection name
-// MVP: Simple parsing for "SELECT * FROM projection_name"
-func (qi *QueryInterface) parseSQL(sql string) (string, error) {
-	sql = strings.TrimSpace(strings.ToUpper(sql))
-
-	if !strings.HasPrefix(sql, "SELECT") {
-		return "", fmt.Errorf("only SELECT queries supported")
-	}
-
-	// Find FROM clause
-	fromIndex := strings.Index(sql, "FROM")
-	if fromIndex == -1 {
-		return "", fmt.Errorf("FROM clause required")
-	}
-
-	// Extract projection name after FROM
-	projectionPart := strings.TrimSpace(sql[fromIndex+4:])
-	// Remove trailing clauses (WHERE, etc.)
-	if whereIndex := strings.Index(projectionPart, " WHERE"); whereIndex != -1 {
-		projectionPart = strings.TrimSpace(projectionPart[:whereIndex])
-	}
-
-	if projectionPart == "" {
-		return "", fmt.Errorf("projection name required after FROM")
-	}
-
-	return projectionPart, nil
-}
-
-// applySecurityFiltering applies RLS and column masking
-func (qi *QueryInterface) applySecurityFiltering(ctx *security.SecurityContext, data interface{}) (interface{}, error) {
-	// Check permissions
-	if !qi.security.CheckPermission(ctx, "query", "read") {
-		return nil, fmt.Errorf("insufficient permissions")
-	}
-
-	// Apply RLS (MVP: tenant-based filtering)
-	filteredData, err := qi.security.ApplyRLS(ctx, data, "tenant_id")
-	if err != nil {
-		return nil, err
-	}
-
-	// Apply column masking (MVP: mask sensitive fields)
-	maskedData, err := qi.security.MaskColumns(ctx, filteredData, []string{"email", "phone"})
-	if err != nil {
-		return nil, err
-	}
-
-	return maskedData, nil
-}
-
 // handleQuery handles HTTP query requests
 func (qi *QueryInterface) handleQuery(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Extract token from header
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		http.Error(w, "Missing authorization token", http.StatusUnauthorized)
-		return
-	}
-
-	// Validate token
-	tokenResult, err := qi.security.ValidateToken(r.Context(), token)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Token validation error: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	if !tokenResult.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
-	// Parse query from request body
-	// MVP: Simple query parsing
-	sql := r.URL.Query().Get("sql")
-	if sql == "" {
-		http.Error(w, "Missing sql parameter", http.StatusBadRequest)
-		return
-	}
-
-	req := &QueryRequest{
-		SQL:         sql,
-		SecurityCtx: tokenResult.Context,
-	}
-
-	// Execute query
-	resp, err := qi.ExecuteQuery(r.Context(), req)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Query execution error: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	if resp.Error != "" {
-		http.Error(w, resp.Error, http.StatusBadRequest)
-		return
-	}
-
-	// Return JSON response
-	w.Header().Set("Content-Type", "application/json")
+	// Dummy implementation for now, as projector is removed.
+	// In a real scenario, this would involve query parsing and execution.
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{"data": "%v", "source": "%s", "latency_ms": %.2f}`,
-		resp.Data, resp.Source, float64(resp.Latency.Nanoseconds())/1000000)
+	json.NewEncoder(w).Encode(map[string]string{"result": "query ok"})
 }
 
 // handleHealth handles health check requests
 func (qi *QueryInterface) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
+}
+
+// handleAdminQuery is a protected endpoint
+func (qi *QueryInterface) handleAdminQuery(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"result": "admin access granted"})
+}
+
+// authMiddleware wraps a handler to perform authentication and authorization
+func (qi *QueryInterface) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tokenString := r.Header.Get("Authorization")
+		result, err := qi.secGateway.ValidateToken(r.Context(), tokenString)
+		if err != nil || !result.Valid {
+			http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		// Authorization check
+		if !qi.secGateway.CheckPermission(result.Context, "admin:access") {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
 }

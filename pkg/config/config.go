@@ -30,10 +30,10 @@ type ClusterConfig struct {
 
 // StorageConfig contains configuration for storage backends
 type StorageConfig struct {
-	Type            string                 `yaml:"type"` // sqlite, postgresql, rocksdb, leveldb, memory
-	Path            string                 `yaml:"path,omitempty"`
+	Type             string                 `yaml:"type"` // sqlite, postgresql, rocksdb, leveldb, memory
+	Path             string                 `yaml:"path,omitempty"`
 	ConnectionString string                 `yaml:"connection_string,omitempty"`
-	Options         map[string]interface{} `yaml:"options,omitempty"`
+	Options          map[string]interface{} `yaml:"options,omitempty"`
 }
 
 // EventStoreConfig configures the event storage layer
@@ -62,6 +62,7 @@ type SecurityConfig struct {
 	MTLSEnabled        bool   `yaml:"mtls_enabled"`
 	JWTIssuer          string `yaml:"jwt_issuer"`
 	JWTLifetimeSec     int64  `yaml:"jwt_lifetime_sec"`
+	JWSSecret          string `yaml:"jws_secret"`
 	AuditStreamEnabled bool   `yaml:"audit_stream_enabled"`
 	SPIFFETrustDomain  string `yaml:"spiffe_trust_domain"`
 }

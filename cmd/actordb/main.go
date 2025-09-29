@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/junkawasaki/actordb-dokigoto/internal/control"
 	"github.com/junkawasaki/actordb-dokigoto/internal/eventstore"
 	"github.com/junkawasaki/actordb-dokigoto/internal/projector"
@@ -17,15 +20,21 @@ import (
 )
 
 func main() {
-	var configPath string
-	flag.StringVar(&configPath, "config", "config/example.yaml", "Path to configuration file")
+	configPath := flag.String("config", "config/example.yaml", "Path to the configuration file")
+	generateToken := flag.Bool("generate-token", false, "Generate a sample JWT token and exit")
 	flag.Parse()
 
-	// Load configuration
-	cfg, err := config.Load(configPath)
+	cfg, err := config.Load(*configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	if *generateToken {
+		generateSampleToken(cfg)
+		return
+	}
+
+	log.Println("Starting ActorDB components...")
 
 	// Initialize components following topological order from dag.jsonnet
 	ctx, cancel := context.WithCancel(context.Background())
@@ -50,10 +59,7 @@ func main() {
 	}
 
 	// 4. Query Interface
-	qry, err := query.New(cfg.Query, proj, secGW)
-	if err != nil {
-		log.Fatalf("Failed to initialize query interface: %v", err)
-	}
+	qry := query.NewQueryInterface(cfg.Query, es, secGW)
 
 	// 5. Control Plane (monitoring and scaling)
 	ctrl, err := control.New(cfg.Control, es, proj, secGW)
@@ -101,4 +107,34 @@ func main() {
 	secGW.Stop()
 
 	log.Println("ActorDB shutdown complete")
+}
+
+func generateSampleToken(cfg *config.Config) {
+	// Allow overriding roles via environment variable
+	roles := []string{"user", "reader"} // default roles
+	if os.Getenv("TOKEN_ROLES") != "" {
+		// Simple override for testing - in production use proper role management
+		if os.Getenv("TOKEN_ROLES") == "admin" {
+			roles = []string{"admin"}
+		}
+	}
+
+	claims := security.CustomClaims{
+		TenantID:   "tenant-test-456",
+		Roles:      roles,
+		Attributes: map[string]interface{}{"department": "testing"},
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    cfg.Security.JWTIssuer,
+			Subject:   "user-test-123",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	ss, err := token.SignedString([]byte(cfg.Security.JWSSecret))
+	if err != nil {
+		log.Fatalf("Failed to sign token: %v", err)
+	}
+	fmt.Println(ss)
 }

@@ -40,6 +40,7 @@ security:
   mtls_enabled: true
   jwt_issuer: "https://actordb.example.com"
   jwt_lifetime_sec: 300
+  jws_secret: "your-very-secret-and-long-key-for-hs256"
   audit_stream_enabled: true
   spiffe_trust_domain: "example.org"
 

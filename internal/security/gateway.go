@@ -8,9 +8,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/junkawasaki/actordb-dokigoto/pkg/config"
 )
 
@@ -25,6 +27,14 @@ type SecurityContext struct {
 	ExpiresAt   time.Time
 	TokenHash   string
 	AuditID     string
+}
+
+// CustomClaims defines the structure of custom JWT claims for ActorDB
+type CustomClaims struct {
+	Roles      []string               `json:"roles"`
+	Attributes map[string]interface{} `json:"attributes"`
+	TenantID   string                 `json:"tenant_id"`
+	jwt.RegisteredClaims
 }
 
 // AuditEvent represents a security audit event
@@ -56,6 +66,7 @@ type TokenValidationResult struct {
 type SecurityGateway struct {
 	config        config.SecurityConfig
 	tlsConfig     *tls.Config
+	policy        map[string][]string // Role -> []Permissions
 	auditStream   chan AuditEvent
 	auditStreamMu sync.Mutex
 	running       bool
@@ -74,6 +85,12 @@ func NewGateway(cfg config.SecurityConfig) (*SecurityGateway, error) {
 		running:     false,
 		ctx:         ctx,
 		cancel:      cancel,
+		// MVP Policy Definition
+		policy: map[string][]string{
+			"admin":  {"read", "write", "admin:access"},
+			"user":   {"read"},
+			"reader": {"read"},
+		},
 	}
 
 	// Configure mTLS if enabled
@@ -144,52 +161,70 @@ func (sg *SecurityGateway) Stop() {
 }
 
 // ValidateToken validates a JWT token and returns security context
-func (sg *SecurityGateway) ValidateToken(ctx context.Context, token string) (*TokenValidationResult, error) {
+func (sg *SecurityGateway) ValidateToken(ctx context.Context, tokenString string) (*TokenValidationResult, error) {
 	if !sg.running {
 		return &TokenValidationResult{Valid: false, Error: fmt.Errorf("security gateway not running")}, nil
 	}
 
-	// MVP: Simple token validation
-	// In production: proper JWT parsing, signature verification, claims validation
-	if token == "" {
-		result := &TokenValidationResult{
-			Valid: false,
-			Error: fmt.Errorf("empty token"),
-		}
+	if tokenString == "" {
+		result := &TokenValidationResult{Valid: false, Error: fmt.Errorf("empty token")}
 		sg.auditEvent("token_validation", "token", "", "system", false, "empty token")
 		return result, nil
 	}
 
-	// Mock security context for MVP
-	context := &SecurityContext{
-		TenantID:    "tenant1",
-		UserID:      "user123",
-		Roles:       []string{"user", "admin"},
-		Permissions: []string{"read", "write"},
-		Attributes: map[string]interface{}{
-			"department": "engineering",
-		},
-		ExpiresAt: time.Now().Add(time.Hour),
-		TokenHash: "mock_hash",
-		AuditID:   fmt.Sprintf("audit_%d", time.Now().Unix()),
+	// JWS tokens are often prefixed with "Bearer "
+	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+
+	claims := &CustomClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		// Validate the alg is what we expect:
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(sg.config.JWSSecret), nil
+	})
+
+	if err != nil {
+		sg.auditEvent("token_validation", "token", "", "system", false, fmt.Sprintf("token parsing error: %v", err))
+		return &TokenValidationResult{Valid: false, Error: err}, nil
+	}
+
+	if !token.Valid {
+		sg.auditEvent("token_validation", "token", claims.Subject, claims.TenantID, false, "invalid token")
+		return &TokenValidationResult{Valid: false, Error: fmt.Errorf("invalid token")}, nil
+	}
+
+	// Construct security context from claims
+	securityCtx := &SecurityContext{
+		TenantID:    claims.TenantID,
+		UserID:      claims.Subject,
+		Roles:       claims.Roles,
+		Permissions: []string{}, // Permissions should be derived from roles by a policy engine
+		Attributes:  claims.Attributes,
+		ExpiresAt:   claims.ExpiresAt.Time,
+		TokenHash:   "mock_hash", // In prod, hash the token string
+		AuditID:     fmt.Sprintf("audit_%d", time.Now().Unix()),
 	}
 
 	result := &TokenValidationResult{
 		Valid:   true,
-		Context: context,
+		Context: securityCtx,
 	}
 
-	sg.auditEvent("token_validation", "token", context.UserID, context.TenantID, true, "")
+	sg.auditEvent("token_validation", "token", securityCtx.UserID, securityCtx.TenantID, true, "")
 	return result, nil
 }
 
 // CheckPermission checks if a security context has permission for an action
-func (sg *SecurityGateway) CheckPermission(ctx *SecurityContext, resource string, action string) bool {
-	// MVP: Simple permission check
-	// In production: ABAC/RBAC policy evaluation
-	for _, perm := range ctx.Permissions {
-		if perm == action || perm == "admin" {
-			return true
+func (sg *SecurityGateway) CheckPermission(ctx *SecurityContext, permission string) bool {
+	// In production: Use a proper policy engine like OPA
+	for _, role := range ctx.Roles {
+		if permissions, ok := sg.policy[role]; ok {
+			for _, p := range permissions {
+				if p == permission {
+					return true
+				}
+			}
 		}
 	}
 	return false
