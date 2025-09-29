@@ -29,6 +29,11 @@ go.work
 /client/typescript/yarn-error.log*
 /client/typescript/yarn-debug.log*
 
+# Docs build output
+/docs/dist/
+/docs/.astro/
+/docs/.astro.out/
+
 # LaTeX
 *.aux
 *.log

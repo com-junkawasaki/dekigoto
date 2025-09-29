@@ -4,6 +4,8 @@ import tailwind from '@astrojs/tailwind';
 
 // https://astro.build/config
 export default defineConfig({
+  site: 'https://com-junkawasaki.github.io',
+  base: process.env.NODE_ENV === 'production' ? '/actordb-dokigoto' : '/',
   integrations: [
     starlight({
       title: 'ActorDB TypeScript',
@@ -28,7 +30,6 @@ export default defineConfig({
           items: [
             { label: 'Process Network', link: '/architecture/process-network' },
             { label: 'Merkle DAG', link: '/architecture/merkle-dag' },
-            { label: 'Topological Ordering', link: '/architecture/topological-ordering' },
           ]
         },
         {
@@ -36,36 +37,8 @@ export default defineConfig({
           items: [
             { label: 'Security Gateway', link: '/components/security-gateway' },
             { label: 'EventStore', link: '/components/eventstore' },
-            { label: 'Projection Engine', link: '/components/projection-engine' },
-            { label: 'Query Interface', link: '/components/query-interface' },
-            { label: 'Control Plane', link: '/components/control-plane' },
           ]
         },
-        {
-          label: 'API Reference',
-          items: [
-            { label: 'Configuration', link: '/api/configuration' },
-            { label: 'Storage Backends', link: '/api/storage' },
-            { label: 'REST APIs', link: '/api/rest-apis' },
-          ]
-        },
-        {
-          label: 'Guides',
-          items: [
-            { label: 'Custom Projections', link: '/guides/custom-projections' },
-            { label: 'Storage Configuration', link: '/guides/storage-config' },
-            { label: 'Security Setup', link: '/guides/security-setup' },
-            { label: 'Monitoring', link: '/guides/monitoring' },
-          ]
-        },
-        {
-          label: 'Examples',
-          items: [
-            { label: 'Basic Event Sourcing', link: '/examples/basic-eventsourcing' },
-            { label: 'CQRS with Projections', link: '/examples/cqrs-projections' },
-            { label: 'Real-time Dashboards', link: '/examples/realtime-dashboards' },
-          ]
-        }
       ],
       customCss: ['./src/styles/custom.css'],
       components: {
