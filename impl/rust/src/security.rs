@@ -90,7 +90,7 @@ impl SecurityGateway {
     pub fn new(config: SecurityConfig) -> Result<Self> {
         // Validate configuration
         if config.jws_secret.is_empty() {
-            return Err(ActorDBError::Config(config::ConfigError::Message(
+            return Err(ActorDBError::Config(crate::config::ConfigError::Invalid(
                 "JWS secret cannot be empty".to_string()
             )));
         }
@@ -105,7 +105,7 @@ impl SecurityGateway {
         policy.insert("user".to_string(), vec!["read".to_string()]);
         policy.insert("reader".to_string(), vec!["read".to_string()]);
         policy.insert("read".to_string(), vec!["read".to_string()]);
-        policy.insert("write".to_string(), vec!["read".to_string(), "write".to_string()]);
+        policy.insert("writer".to_string(), vec!["read".to_string(), "write".to_string()]);
 
         // Initialize audit stream if enabled
         let audit_stream = if config.audit_stream_enabled {
@@ -350,7 +350,7 @@ mod tests {
             listen_addr: None,
         };
 
-        let gateway = SecurityGateway::new(config).unwrap();
+        let mut gateway = SecurityGateway::new(config).unwrap();
         gateway.init().await.unwrap();
         gateway.start().await.unwrap();
 
@@ -358,7 +358,7 @@ mod tests {
         let token = gateway.generate_test_token(
             "test-tenant",
             "test-user",
-            &[Role::Read, Role::Write]
+            &[Role::Reader, Role::Writer]
         ).await.unwrap();
 
         assert!(!token.is_empty());
@@ -371,8 +371,8 @@ mod tests {
         let context = result.context.unwrap();
         assert_eq!(context.tenant_id.0, "test-tenant");
         assert_eq!(context.user_id, "test-user");
-        assert!(context.roles.contains(&Role::Read));
-        assert!(context.roles.contains(&Role::Write));
+        assert!(context.roles.contains(&Role::Reader));
+        assert!(context.roles.contains(&Role::Writer));
 
         // Test permission check
         assert!(gateway.check_permission(&context, "read").await);
@@ -394,7 +394,7 @@ mod tests {
             listen_addr: None,
         };
 
-        let gateway = SecurityGateway::new(config).unwrap();
+        let mut gateway = SecurityGateway::new(config).unwrap();
         gateway.init().await.unwrap();
         gateway.start().await.unwrap();
 

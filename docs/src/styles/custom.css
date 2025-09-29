@@ -1,0 +1,155 @@
+/* TypeScript-themed documentation styles */
+:root {
+  --sl-color-accent-low: #3178c6;
+  --sl-color-accent: #3178c6;
+  --sl-color-accent-high: #235a97;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #f8f9fa;
+  --sl-color-gray-2: #e9ecef;
+  --sl-color-gray-3: #dee2e6;
+  --sl-color-gray-4: #ced4da;
+  --sl-color-gray-5: #adb5bd;
+  --sl-color-gray-6: #6c757d;
+  --sl-color-gray-7: #495057;
+  --sl-color-black: #212529;
+}
+
+/* Code syntax highlighting for TypeScript */
+pre {
+  background-color: var(--sl-color-gray-1);
+  border: 1px solid var(--sl-color-gray-3);
+  border-radius: 6px;
+}
+
+code {
+  background-color: var(--sl-color-gray-1);
+  color: #3178c6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+}
+
+/* Process Network visualization styles */
+.process-node {
+  background: linear-gradient(135deg, #3178c6, #235a97);
+  color: white;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(49, 120, 198, 0.1);
+}
+
+.process-edge {
+  stroke: #3178c6;
+  stroke-width: 2;
+  fill: none;
+}
+
+/* Merkle DAG visualization */
+.merkle-node {
+  fill: #3178c6;
+  stroke: #235a97;
+  stroke-width: 2;
+}
+
+.merkle-hash {
+  font-family: 'SF Mono', monospace;
+  font-size: 0.8em;
+  color: #6c757d;
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* Component diagrams */
+.component-diagram {
+  background: #f8f9fa;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.interface-definition {
+  background: #e7f3ff;
+  border-left: 4px solid #3178c6;
+  padding: 1rem;
+  margin: 1rem 0;
+  font-family: 'SF Mono', monospace;
+}
+
+/* API documentation styles */
+.api-endpoint {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.api-method {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.9em;
+  text-transform: uppercase;
+}
+
+.api-method.get { background: #28a745; color: white; }
+.api-method.post { background: #007bff; color: white; }
+.api-method.put { background: #ffc107; color: black; }
+.api-method.delete { background: #dc3545; color: white; }
+
+/* TypeScript type definitions */
+.type-definition {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 1rem 0;
+  font-family: 'SF Mono', monospace;
+  overflow-x: auto;
+}
+
+/* Architecture diagrams */
+.architecture-diagram {
+  text-align: center;
+  margin: 2rem 0;
+}
+
+.flow-diagram {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.flow-step {
+  background: #3178c6;
+  color: white;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  min-width: 120px;
+  box-shadow: 0 4px 6px rgba(49, 120, 198, 0.2);
+}
+
+.flow-arrow {
+  font-size: 2rem;
+  color: #6c757d;
+  margin: 0 1rem;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .flow-diagram {
+    flex-direction: column;
+  }
+
+  .flow-arrow {
+    transform: rotate(90deg);
+    margin: 1rem 0;
+  }
+}

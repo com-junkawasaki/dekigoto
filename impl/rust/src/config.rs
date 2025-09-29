@@ -71,6 +71,7 @@ pub struct SecurityConfig {
     pub jws_secret: String,
     pub audit_stream_enabled: bool,
     pub spiffe_trust_domain: String,
+    pub listen_addr: Option<String>,
 }
 
 /// Query interface configuration
@@ -121,8 +122,10 @@ pub enum ConfigError {
 impl Config {
     /// Load configuration from a YAML file
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
-        let contents = std::fs::read_to_string(path)?;
-        let config: Config = serde_yaml::from_str(&contents)?;
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| ConfigError::Io(e))?;
+        let config: Config = serde_yaml::from_str(&contents)
+            .map_err(|e| ConfigError::Yaml(e))?;
 
         // Basic validation
         config.validate()?;

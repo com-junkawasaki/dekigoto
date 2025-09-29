@@ -74,7 +74,7 @@ pub mod error {
     #[derive(Error, Debug)]
     pub enum ActorDBError {
         #[error("Configuration error: {0}")]
-        Config(#[from] config::ConfigError),
+        Config(#[from] crate::config::ConfigError),
 
         #[error("Security error: {0}")]
         Security(#[from] SecurityError),
