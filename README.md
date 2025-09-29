@@ -1,5 +1,8 @@
 # ActorDB - Dekigoto
 
+![ActorDB Logo](resources/zatsudan_kaiwa_roujin_kodomo.png)
+*Logo illustration by [irasutoya](https://www.irasutoya.com/2015/08/blog-post_33.html)*
+
 **ActorDB** is a novel database model that combines **single-writer actor serialization**, **incremental view maintenance (IVM)**, and **zero-trust messaging** into a unified database experience.
 
 ## Overview
@@ -145,6 +148,57 @@ console.log(result.data);
 ```
 
 See `client/typescript/README.md` for detailed documentation.
+
+## C Library Dependencies
+
+For RocksDB and LevelDB storage backends, you need to install the corresponding C libraries:
+
+### macOS (Homebrew)
+
+```bash
+brew install rocksdb leveldb
+```
+
+### Ubuntu/Debian
+
+```bash
+sudo apt-get install librocksdb-dev libleveldb-dev
+```
+
+### CentOS/RHEL
+
+```bash
+sudo yum install rocksdb-devel leveldb-devel
+```
+
+### Build with C Libraries
+
+Use the provided build script:
+
+```bash
+# Build all variants
+./build.sh --all
+
+# Build specific storage backend
+./build.sh --rocksdb
+./build.sh --leveldb
+
+# Run built binaries
+./bin/actordb-rocksdb --config config/example.yaml
+./bin/actordb-leveldb --config config/example.yaml
+```
+
+### Manual Build
+
+```bash
+# RocksDB
+CGO_CFLAGS="-I/opt/homebrew/include" CGO_LDFLAGS="-L/opt/homebrew/lib -lrocksdb -lz -lbz2 -lsnappy -llz4 -lzstd" \
+go build -tags rocksdb -o actordb-rocksdb ./cmd/actordb
+
+# LevelDB
+CGO_CFLAGS="-I/opt/homebrew/include" CGO_LDFLAGS="-L/opt/homebrew/lib -lleveldb -lz -lbz2 -lsnappy -llz4 -lzstd" \
+go build -tags leveldb -o actordb-leveldb ./cmd/actordb
+```
 
 ## MVP Validation Criteria
 

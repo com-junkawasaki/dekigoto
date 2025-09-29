@@ -8,17 +8,19 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
-	"github.com/tecbot/gorocksdb"
+	"github.com/linxGnu/grocksdb"
 )
 
 // RocksDBStorage implements Storage interface using RocksDB
 type RocksDBStorage struct {
-	db        *gorocksdb.DB
-	opts      *gorocksdb.Options
-	ro        *gorocksdb.ReadOptions
-	wo        *gorocksdb.WriteOptions
+	db        *grocksdb.DB
+	opts      *grocksdb.Options
+	ro        *grocksdb.ReadOptions
+	wo        *grocksdb.WriteOptions
 	sequences sync.Map // aggregate_id -> last_sequence
 }
 
@@ -35,12 +37,12 @@ func (s *RocksDBStorage) Open(ctx context.Context, config map[string]interface{}
 	}
 
 	// Create directory if it doesn't exist
-	if err := ensureDir(dbPath); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return fmt.Errorf("failed to create RocksDB directory: %w", err)
 	}
 
 	// RocksDB options
-	opts := gorocksdb.NewDefaultOptions()
+	opts := grocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
 	opts.SetMaxOpenFiles(-1) // Unlimited
 	opts.SetMaxBackgroundJobs(4)
@@ -50,15 +52,15 @@ func (s *RocksDBStorage) Open(ctx context.Context, config map[string]interface{}
 	opts.SetMaxWriteBufferNumber(3)
 	opts.SetTargetFileSizeBase(64 << 20) // 64MB
 
-	db, err := gorocksdb.OpenDb(opts, dbPath)
+	db, err := grocksdb.OpenDb(opts, dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open RocksDB: %w", err)
 	}
 
 	s.db = db
 	s.opts = opts
-	s.ro = gorocksdb.NewDefaultReadOptions()
-	s.wo = gorocksdb.NewDefaultWriteOptions()
+	s.ro = grocksdb.NewDefaultReadOptions()
+	s.wo = grocksdb.NewDefaultWriteOptions()
 	s.wo.SetSync(false) // Disable sync for performance
 
 	// Load sequences from disk
@@ -110,7 +112,7 @@ func (s *RocksDBStorage) WriteEvent(ctx context.Context, event Event) error {
 	sequenceKey := s.makeSequenceKey(event.AggregateID)
 
 	// Batch write
-	batch := gorocksdb.NewWriteBatch()
+	batch := grocksdb.NewWriteBatch()
 	defer batch.Destroy()
 
 	batch.Put(eventKey, eventData)
@@ -176,7 +178,7 @@ func (s *RocksDBStorage) GetLastSequence(ctx context.Context, aggregateID string
 func (s *RocksDBStorage) WriteSnapshot(ctx context.Context, aggregateID string, sequence int64, data []byte) error {
 	snapshotKey := s.makeSnapshotKey(aggregateID)
 
-	batch := gorocksdb.NewWriteBatch()
+	batch := grocksdb.NewWriteBatch()
 	defer batch.Destroy()
 
 	// Store snapshot data with sequence
@@ -225,9 +227,8 @@ func (s *RocksDBStorage) ReadSnapshot(ctx context.Context, aggregateID string) (
 // Compact performs compaction
 func (s *RocksDBStorage) Compact(ctx context.Context) error {
 	// Compact entire database
-	if err := s.db.CompactRange(gorocksdb.Range{}); err != nil {
-		return fmt.Errorf("failed to compact database: %w", err)
-	}
+	r := grocksdb.Range{}
+	s.db.CompactRange(r)
 	return nil
 }
 
@@ -250,7 +251,8 @@ func (s *RocksDBStorage) GetStats(ctx context.Context) (map[string]interface{}, 
 	}
 
 	for _, prop := range properties {
-		if value, err := s.db.GetProperty(prop); err == nil {
+		value := s.db.GetProperty(prop)
+		if value != "" {
 			stats[prop] = value
 		}
 	}
@@ -275,7 +277,7 @@ func (s *RocksDBStorage) WriteEventsBatch(ctx context.Context, events []Event) e
 		return nil
 	}
 
-	batch := gorocksdb.NewWriteBatch()
+	batch := grocksdb.NewWriteBatch()
 	defer batch.Destroy()
 
 	// Group events by aggregate for sequence checking

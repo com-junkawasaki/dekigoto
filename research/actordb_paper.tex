@@ -15,20 +15,32 @@
 \maketitle
 
 \begin{abstract}
-ActorDB is a novel database model that combines single-writer actor serialization, incremental view maintenance (IVM), and zero-trust messaging into a unified database experience. It provides an actor-based event persistence write model and a query-driven projection read model with on-demand computation. Security is a core tenant, featuring mTLS, JWS signatures, and fine-grained access control (ABAC/RBAC) with row-level security and column masking. ActorDB guarantees strong consistency within actors and eventual consistency across actors, making it suitable for modern, distributed, and secure data-intensive applications.
+This paper presents ActorDB, a novel database architecture that tightly integrates a single-writer actor model for writes, Incremental View Maintenance (IVM) for reads, and a zero-trust security model as a core component. The primary contribution of this work is the unification of these powerful but complex concepts into a single, cohesive system designed to reduce architectural complexity for developers of modern, data-intensive applications. We argue that by providing these capabilities out-of-the-box, ActorDB can offer a more robust, secure, and developer-friendly platform compared to solutions that require manual integration of separate systems for actor persistence, stream processing, and security. We present the core architecture, discuss the critical trade-offs in its design, and define the performance criteria for a Minimum Viable Product (MVP) to validate our approach.
 \end{abstract}
 
 \section{Introduction}
 
-The increasing demand for scalable, real-time, and secure data processing systems has exposed the limitations of traditional database architectures. Modern applications require a new approach that can handle high-throughput event streams, provide low-latency query responses, and enforce granular security policies without compromising performance. ActorDB is designed to address these challenges by providing a novel architecture that unifies concepts from actor systems, event sourcing, and stream processing.
+The increasing demand for scalable, real-time, and secure data processing systems has exposed the limitations of traditional database architectures. Modern applications, particularly in domains like IoT, finance, and interactive entertainment, require a new approach that can handle high-throughput event streams, provide low-latency query responses, and enforce granular security policies without compromising performance. Developers are often forced to compose complex architectures from disparate components—such as Akka or Orleans for business logic, Kafka for event transport, Flink for stream processing, and a traditional database like PostgreSQL for storing read models. This "à la carte" approach increases complexity, introduces operational overhead, and creates potential security gaps between components.
 
-ActorDB's core contributions are:
+ActorDB is designed to address these challenges by providing a novel architecture that unifies concepts from actor systems, event sourcing, and stream processing into a single database experience. Its core contributions are:
 \begin{itemize}
     \item \textbf{Write Model}: An actor (aggregate) based event persistence model with append-only semantics, ensuring a single writer per actor for strong serialization.
     \item \textbf{Read Model}: A flexible query-driven projection system with on-demand computation and automatic materialization promotion for optimized read performance.
     \item \textbf{Security}: A built-in zero-trust security model using mTLS with JWS signatures, and ABAC/RBAC with RLS/column masking integrated into projections.
     \item \textbf{Consistency}: Strong single-writer serialization within actors, with eventual consistency across actors managed via sagas.
 \end{itemize}
+
+\section{Related Work}
+The design of ActorDB builds upon several established fields of research, including actor systems, event sourcing, and incremental view maintenance. While many systems implement one or more of these concepts, ActorDB's primary novelty lies in their tight integration into a single, unified database experience with security as a foundational component.
+
+\subsection{Actor Systems and Event Sourcing}
+Frameworks like Akka Persistence and Microsoft Orleans provide robust implementations of the actor model with built-in persistence. These systems excel at managing state for large numbers of concurrent actors. EventStoreDB is a specialized database optimized for event sourcing. However, these are often libraries or separate components that developers must integrate into a larger architecture. For instance, a developer using Akka would still need to choose and configure a separate database for read models (projections). In contrast, ActorDB is designed as an all-in-one solution, providing both the write-side (actor persistence) and the read-side (projections) out of the box, reducing architectural complexity.
+
+\subsection{Incremental View Maintenance and Stream Processing}
+Systems like Materialize and Apache Flink are leaders in the field of stream processing and Incremental View Maintenance (IVM). They provide powerful capabilities for creating low-latency, real-time views over data streams. These systems, however, are typically focused on the read-side of the architecture and require a separate data source, such as Apache Kafka. ActorDB integrates IVM directly with its actor-based event store. Furthermore, a key proposed innovation in ActorDB is the dynamic optimization of materialized views. While systems like Materialize require developers to decide which views to materialize statically, ActorDB aims to automate this process by promoting or demoting views based on query patterns and performance SLOs, thus optimizing resource usage dynamically.
+
+\subsection{Security in Data Systems}
+Traditional databases like PostgreSQL or CockroachDB offer robust security features, typically centered around connection-level authentication (e.g., TLS), and access control lists (ACLs) for tables and columns. ActorDB differentiates itself by adopting a zero-trust security model at its core. Inspired by modern infrastructure like SPIFFE/SPIRE, it treats security not as a layer but as an intrinsic property of the data flow. By integrating mTLS for identity, JWS for message integrity, and fine-grained ABAC/RBAC directly into the data projection layer, it aims to provide a much more granular and secure-by-default environment suited for distributed microservices architectures.
 
 \section{Architecture}
 
@@ -60,15 +72,15 @@ The architecture of ActorDB is designed around a central event store, with disti
 \subsection{EventStore}
 The EventStore is the heart of ActorDB. It provides:
 \begin{itemize}
-    \item Actor-based single-writer append-only event storage.
-    \item Snapshot management with configurable retention policies.
-    \item Efficient data storage through compression (Protobuf/Parquet) and indexing.
+    \item Actor-based single-writer append-only event storage. The storage backend is pluggable, with planned support for engines like RocksDB, SQLite, and PostgreSQL. The default implementation leverages a log-structured merge-tree (LSM tree) engine for high write throughput.
+    \item Snapshot management with configurable retention policies to optimize actor hydration time.
+    \item Efficient data storage through compression (Protobuf/Parquet) and indexing on actor ID and event type.
 \end{itemize}
 
 \subsection{Projection Engine}
 The Projection Engine is responsible for creating read models from the event store. Its key features are:
 \begin{itemize}
-    \item Incremental View Maintenance (IVM) with automatic promotion and demotion of materialized views.
+    \item Incremental View Maintenance (IVM). A key innovation is the dynamic management of materialized views. The Control Plane monitors query performance against defined SLOs. If a query pattern frequently violates its latency SLO, the Control Plane can automatically instruct the Projection Engine to create a materialized view to accelerate it. Conversely, infrequently used views can be demoted to on-demand computation to conserve resources.
     \item Handling of late-arriving events using watermarks and correction windows.
     \item Priority queuing to differentiate between interactive and batch workloads.
 \end{itemize}
@@ -76,17 +88,36 @@ The Projection Engine is responsible for creating read models from the event sto
 \subsection{Security Layer}
 Security is a first-class citizen in ActorDB. The security layer includes:
 \begin{itemize}
-    \item mTLS with SPIFFE for workload identity.
-    \item Short-lived JWTs with Proof-of-Possession (PoP).
-    \item Attribute-Based and Role-Based Access Control (ABAC/RBAC) with Row-Level Security (RLS) and column masking.
-    \item Comprehensive audit streams for all operations.
+    \item mTLS with SPIFFE for workload identity, ensuring all communication is authenticated and encrypted.
+    \item Short-lived JWTs with Proof-of-Possession (PoP). All commands sent to actors must be signed with a JWS (JSON Web Signature), providing non-repudiation and per-message authentication.
+    \item Attribute-Based and Role-Based Access Control (ABAC/RBAC) with Row-Level Security (RLS) and column masking. Policies are applied transparently at the projection layer.
+    \item Comprehensive audit streams for all operations, including policy changes and data access.
 \end{itemize}
 
 \subsection{Query Interface}
-ActorDB provides a user-friendly query interface with:
+ActorDB provides a user-friendly query interface. The query language extends SQL to better support the event-sourcing model, particularly for temporal and streaming queries.
+
+For example, a standard query to get the current state of a user's shopping cart might look like:
+\begin{verbatim}
+SELECT * FROM projections.cart_view WHERE cart_id = 'some-uuid';
+\end{verbatim}
+
+To query the state of the cart at a specific point in time, a temporal query could be expressed as:
+\begin{verbatim}
+SELECT * FROM projections.cart_view
+FOR TIMESTAMP AS OF '2025-09-29T10:00:00Z'
+WHERE cart_id = 'some-uuid';
+\end{verbatim}
+
+Furthermore, to subscribe to real-time updates for that cart, a streaming query might look like:
+\begin{verbatim}
+SUBSCRIBE TO projections.cart_view WHERE cart_id = 'some-uuid';
+\end{verbatim}
+
+Key features include:
 \begin{itemize}
-    \item A SQL-like declarative query language.
-    \item Transparent integration of Row-Level Security (RLS).
+    \item A SQL-like declarative query language with extensions for temporal and streaming queries.
+    \item Transparent integration of Row-Level Security (RLS). The results of the queries above would automatically be filtered based on the caller's identity.
     \item Support for temporal queries with event-time semantics.
 \end{itemize}
 
@@ -97,6 +128,22 @@ The Control Plane manages the operational aspects of the database:
     \item Health monitoring and Service Level Objective (SLO) tracking.
     \item Automated certificate rotation and policy distribution.
 \end{itemize}
+
+\section{Discussion and Trade-offs}
+While the integrated architecture of ActorDB offers significant benefits, it also introduces considerable complexity and a number of important trade-offs that must be considered.
+
+\subsection{Complexity Management}
+Integrating an actor system, an event store, a stream processor, and a security gateway into a single database results in a highly complex system. The primary strategy for managing this complexity is the declarative process network model defined in `dag.jsonnet`. This model serves as a single source of truth for the system's architecture, dependencies, and operational policies. By enforcing all operations (deployment, scaling, failure recovery) to be consistent with the DAG, we aim to make the system's behavior more predictable and robust. However, the learning curve for developers and operators is undeniably steeper compared to more traditional, separated systems.
+
+\subsection{Consistency Model}
+ActorDB provides strong consistency (linearizability) within the scope of a single actor, as all commands are processed by a single writer in a well-defined order. However, consistency across actors is eventual. This model is well-suited for many modern applications (e.g., IoT, social media, e-commerce) where strong consistency is only required at the entity level (e.g., a device, a user profile, a shopping cart). For business processes that require coordination across multiple actors, developers must implement compensation logic, for example using the Saga pattern. ActorDB does not provide distributed transactions out of the box, which is a deliberate trade-off to maximize availability and partition tolerance (as per the CAP theorem) and to avoid the high performance cost and complexity of distributed transaction protocols like Two-Phase Commit.
+
+\subsection{Performance Considerations}
+The architecture presents several performance challenges. The zero-trust security model, with its per-message cryptographic signature verification (JWS), introduces a non-trivial CPU overhead compared to traditional connection-based security. While this provides superior security, it may impact raw throughput. We believe this is an acceptable trade-off for security-critical applications.
+
+Another potential issue is that of "hot spot" actors, where a single actor receives a disproportionate amount of traffic, creating a bottleneck. While the control plane can help by rebalancing shards, it cannot solve the fundamental problem of a logical hot spot. Application-level design patterns, such as breaking up monolithic actors, are required to mitigate this.
+
+Finally, while the dynamic IVM is designed to optimize read performance, there is an associated cost. The promotion of a view requires computational resources to build the initial materialized state, and its maintenance consumes resources on an ongoing basis. The control plane's heuristics for promotion and demotion must be carefully tuned to ensure they provide a net performance benefit without causing resource thrashing.
 
 \section{Process Network Model}
 The project adheres to a strict Merkle DAG-based process network model, which is defined in a `dag.jsonnet` configuration. This model governs all operations to maintain topological consistency.
@@ -117,7 +164,9 @@ The performance targets for the Minimum Viable Product (MVP) are set to validate
 \end{itemize}
 
 \section{Conclusion}
-ActorDB presents a comprehensive solution for building modern, high-performance, and secure applications. By unifying concepts from actor systems, event sourcing, and zero-trust security, it provides a robust foundation for developers to build next-generation systems. Future work will focus on expanding the query language, optimizing the projection engine further, and exploring new consistency models.
+ActorDB presents a comprehensive vision for a next-generation database designed for modern, high-performance, and secure applications. By unifying concepts from actor systems, event sourcing, and zero-trust security, it provides a robust foundation that aims to simplify development and operations.
+
+This paper has detailed the core architecture of ActorDB, situated it within the landscape of existing technologies, and transparently discussed the inherent trade-offs of its design, particularly concerning consistency and performance. The path forward is to move from this conceptual framework to a tangible implementation. Future work will focus on building a prototype that realizes the most novel aspects of this design—specifically the dynamic IVM and the deeply integrated security layer. This prototype will then be subjected to rigorous benchmarking against the MVP criteria outlined herein to quantitatively evaluate its performance and validate the benefits of this unified approach. The ultimate goal is to demonstrate that this integrated model can not only match the performance of bespoke, multi-component systems but can also offer superior security and a significantly improved developer experience.
 
 \bibliographystyle{alpha}
 \bibliography{sample}

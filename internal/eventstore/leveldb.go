@@ -202,9 +202,8 @@ func (s *LevelDBStorage) Compact(ctx context.Context) error {
 func (s *LevelDBStorage) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
-	// Get stats from leveldb (limited API)
-	st := s.db.Stats()
-	stats["leveldb"] = st.String()
+	// LevelDB has limited stats API
+	stats["leveldb"] = "stats_not_available"
 
 	// Count aggregates and events
 	aggregateCount := 0
