@@ -125,6 +125,17 @@ This project follows a **Merkle DAG-based process network model** defined in `da
 - **Problem Resolution**: Use reverse topological sort to identify root causes
 - **Dependencies**: Keep dependency DAG minimal and stable
 
+## Comparison with Other Actor Systems
+
+While ActorDB uses the actor model, it is fundamentally a **database system**, not a general-purpose actor library. Here's a brief comparison with a library like `nact` (for Node.js):
+
+- **ActorDB**: A complete data storage and management solution that uses actors for its write model. It includes built-in persistence, queryable read models (projections), and a comprehensive security layer. It's a high-level, batteries-included system for building event-sourced applications.
+- **`nact`**: A low-level library for building concurrent applications in Node.js. It provides the core primitives of the actor model (actors, messaging, supervision) but leaves concerns like data persistence, querying, and security to the developer.
+
+In essence, you would choose ActorDB to **manage your data**, whereas you would choose `nact` to **structure your application's concurrency**.
+
+For a more detailed comparison, see the [full documentation](docs/src/content/docs/architecture/comparison.md).
+
 ## Quick Start
 
 ```bash
