@@ -66,13 +66,13 @@ build_go_storage() {
 
 # Function to build Rust implementation
 build_rust() {
-    local rust_output_dir="${OUTPUT_DIR:-${OUTPUT_DIR}/rust}"
+    local rust_output_dir="${OUTPUT_DIR}/rust"
     echo -e "${BLUE}Building Rust ActorDB...${NC}"
     mkdir -p "$rust_output_dir"
 
     pushd impl/rust > /dev/null
     cargo build --release
-    cp target/release/dekigoto "../../${rust_output_dir}/actordb"
+    cp target/release/actordb "../../${rust_output_dir}/actordb"
     popd > /dev/null
 
     echo -e "${GREEN}✓ Built actordb (Rust)${NC}"

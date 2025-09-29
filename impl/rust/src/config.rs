@@ -44,7 +44,7 @@ pub struct StorageConfig {
 pub struct EventStoreConfig {
     pub data_dir: String,
     pub snapshot_interval: u64,
-    pub retention_period: Duration,
+    pub retention_period: u64, // seconds
     pub compression: String,
     pub max_concurrent_writes: usize,
     pub storage: StorageConfig,
@@ -57,9 +57,9 @@ pub struct ProjectionConfig {
     pub max_memory_mb: usize,
     pub auto_promote_qps_threshold: f64,
     pub auto_demote_qps_threshold: f64,
-    pub late_window_ms: Duration,
-    pub watermark_lag_ms: Duration,
-    pub max_rebuild_time_sec: Duration,
+    pub late_window_ms: u64, // seconds
+    pub watermark_lag_ms: u64, // seconds
+    pub max_rebuild_time_sec: u64, // seconds
 }
 
 /// Security and authentication configuration
@@ -79,7 +79,7 @@ pub struct SecurityConfig {
 pub struct QueryConfig {
     pub listen_addr: String,
     pub max_connections: usize,
-    pub query_timeout_sec: Duration,
+    pub query_timeout_sec: u64, // seconds
     pub enable_sql_dialect: bool,
 }
 
@@ -87,8 +87,8 @@ pub struct QueryConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlConfig {
     pub listen_addr: String,
-    pub metrics_interval_sec: Duration,
-    pub scaling_check_interval_sec: Duration,
+    pub metrics_interval_sec: u64, // seconds
+    pub scaling_check_interval_sec: u64, // seconds
     pub max_hot_key_rho: f64,
 }
 
@@ -96,7 +96,7 @@ pub struct ControlConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MonitoringConfig {
     pub prometheus_addr: String,
-    pub health_check_interval_sec: Duration,
+    pub health_check_interval_sec: u64, // seconds
 }
 
 /// Logging configuration

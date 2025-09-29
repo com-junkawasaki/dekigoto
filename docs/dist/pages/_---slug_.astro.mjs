@@ -1,6 +1,6 @@
 import { c as createComponent, a as createAstro, b as renderComponent, r as renderTemplate } from '../chunks/astro/server_CGSRTnYI.mjs';
 import 'kleur/colors';
-import { a as generateRouteData, $ as $$Page, p as paths } from '../chunks/route-data_DlSBMbEg.mjs';
+import { a as generateRouteData, $ as $$Page, p as paths } from '../chunks/route-data_DD1gvNeL.mjs';
 export { renderers } from '../renderers.mjs';
 
 const $$Astro = createAstro();

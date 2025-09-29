@@ -1,6 +1,6 @@
 import { c as createComponent, m as maybeRenderHead, u as unescapeHTML, r as renderTemplate, a as createAstro, b as renderComponent } from '../chunks/astro/server_CGSRTnYI.mjs';
 import 'kleur/colors';
-import { c as config, u as useTranslations, g as getEntry, a as generateRouteData, $ as $$Page } from '../chunks/route-data_DlSBMbEg.mjs';
+import { c as config, u as useTranslations, g as getEntry, a as generateRouteData, $ as $$Page } from '../chunks/route-data_DD1gvNeL.mjs';
 import 'clsx';
 export { renderers } from '../renderers.mjs';
 

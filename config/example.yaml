@@ -13,7 +13,7 @@ cluster:
 eventstore:
   data_dir: "/data/actordb/events"
   snapshot_interval: 100000  # events
-  retention_period: "720h" # 30d
+  retention_period: 2592000 # 30d in seconds
   compression: "parquet"  # or "protobuf"
   max_concurrent_writes: 1000
   storage:
@@ -31,9 +31,9 @@ projection:
   max_memory_mb: 4096
   auto_promote_qps_threshold: 2.0
   auto_demote_qps_threshold: 0.2
-  late_window_ms: "60s" # 60000
-  watermark_lag_ms: "2s" # 2000
-  max_rebuild_time_sec: "30s" # 30
+  late_window_ms: 60 # seconds
+  watermark_lag_ms: 2 # seconds
+  max_rebuild_time_sec: 30 # seconds
 
 # Security Configuration
 security:
@@ -48,20 +48,20 @@ security:
 query:
   listen_addr: ":9090"
   max_connections: 1000
-  query_timeout_sec: "30s" # 30
+  query_timeout_sec: 30 # seconds
   enable_sql_dialect: true
 
 # Control Plane Configuration
 control:
   listen_addr: ":8080"
-  metrics_interval_sec: "10s" # 10
-  scaling_check_interval_sec: "60s" # 60
+  metrics_interval_sec: 10 # seconds
+  scaling_check_interval_sec: 60 # seconds
   max_hot_key_rho: 0.7
 
 # Monitoring
 monitoring:
   prometheus_addr: ":9091"
-  health_check_interval_sec: "30s" # 30
+  health_check_interval_sec: 30 # seconds
 
 # Logging
 logging:
