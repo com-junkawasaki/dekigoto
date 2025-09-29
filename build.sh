@@ -27,6 +27,7 @@ usage() {
     echo "  --all                 Build all storage backends"
     echo "  --sqlite             Build with SQLite support (default)"
     echo "  --postgresql         Build with PostgreSQL support"
+    echo "  --libsql             Build with libSQL support"
     echo "  --rocksdb            Build with RocksDB support"
     echo "  --leveldb            Build with LevelDB support"
     echo "  --output-dir DIR     Output directory (default: bin)"
@@ -59,6 +60,7 @@ build_storage() {
 BUILD_ALL=false
 BUILD_SQLITE=false
 BUILD_POSTGRESQL=false
+BUILD_LIBSQL=false
 BUILD_ROCKSDB=false
 BUILD_LEVELDB=false
 
@@ -74,6 +76,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --postgresql)
             BUILD_POSTGRESQL=true
+            shift
+            ;;
+        --libsql)
+            BUILD_LIBSQL=true
             shift
             ;;
         --rocksdb)
@@ -101,7 +107,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Default behavior: build SQLite if no options specified
-if ! $BUILD_ALL && ! $BUILD_SQLITE && ! $BUILD_POSTGRESQL && ! $BUILD_ROCKSDB && ! $BUILD_LEVELDB; then
+if ! $BUILD_ALL && ! $BUILD_SQLITE && ! $BUILD_POSTGRESQL && ! $BUILD_LIBSQL && ! $BUILD_ROCKSDB && ! $BUILD_LEVELDB; then
     BUILD_SQLITE=true
 fi
 
@@ -168,6 +174,9 @@ elif $BUILD_SQLITE; then
 
 elif $BUILD_POSTGRESQL; then
     build_storage "postgresql" ""
+
+elif $BUILD_LIBSQL; then
+    build_storage "libsql" ""
 
 elif $BUILD_ROCKSDB; then
     build_storage "rocksdb" "rocksdb"

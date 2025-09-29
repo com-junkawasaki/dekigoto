@@ -17,4 +17,5 @@ require (
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
 	github.com/linxGnu/grocksdb v1.10.2 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
+	github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d // indirect
 )

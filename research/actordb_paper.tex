@@ -46,27 +46,6 @@ Traditional databases like PostgreSQL or CockroachDB offer robust security featu
 
 The architecture of ActorDB is designed around a central event store, with distinct components for querying, projections, and control. A security gateway protects access to the core components.
 
-\begin{verbatim}
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Query Interface │    │ Projection DSL  │    │  Control Plane  │
-│   (SQL Dialect)  │    │  (IVM Engine)   │    │  (Auto-scaling) │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                        │                        │
-         └────────────────────────┼────────────────────────┘
-                                  │
-                    ┌─────────────────┐
-                    │ Security Gateway│
-                    │ (mTLS + JWS +  │
-                    │     ABAC)      │
-                    └─────────────────┘
-                              │
-                    ┌─────────────────┐
-                    │   Event Store   │
-                    │ (Actor-based    │
-                    │  Append-only)   │
-                    └─────────────────┘
-\end{verbatim}
-
 \section{Core Components}
 
 \subsection{EventStore}
@@ -204,7 +183,7 @@ ActorDB presents a comprehensive vision for a next-generation database designed 
 
 This paper has detailed the core architecture of ActorDB, situated it within the landscape of existing technologies, and transparently discussed the inherent trade-offs of its design, particularly concerning consistency and performance. The path forward is to move from this conceptual framework to a tangible implementation. Future work will focus on building a prototype that realizes the most novel aspects of this design—specifically the dynamic IVM and the deeply integrated security layer. This prototype will then be subjected to rigorous benchmarking against the MVP criteria outlined herein to quantitatively evaluate its performance and validate the benefits of this unified approach. The ultimate goal is to demonstrate that this integrated model can not only match the performance of bespoke, multi-component systems but can also offer superior security and a significantly improved developer experience.
 
-\bibliographystyle{alpha}
-\bibliography{sample}
+% \bibliographystyle{alpha}
+% \bibliography{sample}
 
 \end{document}

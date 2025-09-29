@@ -48,6 +48,8 @@ func (f *StorageFactory) NewStorage(config StorageConfig) (Storage, error) {
 		return NewSQLiteStorage(), nil
 	case "postgresql":
 		return NewPostgreSQLStorage(), nil
+	case "libsql":
+		return NewLibSQLStorage(), nil
 	case "memory":
 		return NewMemoryStorage(), nil
 	default:
