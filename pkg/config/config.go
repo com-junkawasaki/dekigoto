@@ -27,6 +27,14 @@ type ClusterConfig struct {
 	Nodes []string `yaml:"nodes"`
 }
 
+// StorageConfig contains configuration for storage backends
+type StorageConfig struct {
+	Type            string                 `yaml:"type"` // sqlite, postgresql, rocksdb, leveldb, memory
+	Path            string                 `yaml:"path,omitempty"`
+	ConnectionString string                 `yaml:"connection_string,omitempty"`
+	Options         map[string]interface{} `yaml:"options,omitempty"`
+}
+
 // EventStoreConfig configures the event storage layer
 type EventStoreConfig struct {
 	DataDir             string        `yaml:"data_dir"`
@@ -34,6 +42,7 @@ type EventStoreConfig struct {
 	RetentionPeriod     time.Duration `yaml:"retention_period"`
 	Compression         string        `yaml:"compression"`
 	MaxConcurrentWrites int           `yaml:"max_concurrent_writes"`
+	Storage             StorageConfig `yaml:"storage"`
 }
 
 // ProjectionConfig configures the projection engine

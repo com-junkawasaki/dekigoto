@@ -1,0 +1,67 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Binaries for programs and plugins
+actordb
+/actordb
+
+# Test binaries
+*.test
+
+# Output of the go coverage tool, specifically when used with the
+# -o option to specify output file names
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# Node
+/client/typescript/node_modules
+/client/typescript/dist
+/client/typescript/npm-debug.log*
+/client/typescript/yarn-error.log*
+/client/typescript/yarn-debug.log*
+
+# LaTeX
+*.aux
+*.log
+*.lof
+*.lot
+*.fls
+*.out
+*.toc
+*.fmt
+*.fot
+*.cb
+*.cb2
+*~
+*.blg
+*.bbl
+*.glg
+*.glo
+*.gls
+*.ist
+*.acn
+*.acr
+*.alg
+*.dvi
+*.ps
+*.pdf
+*.synctex.gz
+_minted*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

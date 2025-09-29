@@ -28,15 +28,32 @@ ActorDB provides:
                               │
                     ┌─────────────────┐
                     │   Event Store   │
-                    │ (Actor-based    │
-                    │  Append-only)   │
+                    │ (Multi-backend │
+                    │  Storage)       │
+                    └─────────────────┘
+                              │
+                    ┌─────────────────┐
+                    │  Storage Layer  │
+                    │ • Memory        │
+                    │ • SQLite        │
+                    │ • PostgreSQL    │
+                    │ • RocksDB*      │
+                    │ • LevelDB*      │
                     └─────────────────┘
 ```
+
+*Requires separate build with tags
 
 ## Core Components
 
 ### EventStore
 - Actor-based single-writer append-only event storage
+- **Multi-backend storage support**:
+  - **Memory**: In-memory storage for testing/development
+  - **SQLite**: Embedded database for single-node deployments
+  - **PostgreSQL**: Production-grade RDBMS with advanced features
+  - **RocksDB**: High-performance KV store (requires `go build -tags rocksdb`)
+  - **LevelDB**: Alternative KV store (requires `go build -tags leveldb`)
 - Snapshot management with configurable retention
 - Compression (Protobuf/Parquet) and indexing
 
@@ -82,6 +99,52 @@ go build -o actordb ./cmd/actordb
 ## Configuration
 
 See `config/example.yaml` for configuration options.
+
+### Storage Configuration
+
+Configure your preferred storage backend in `config/example.yaml`:
+
+```yaml
+eventstore:
+  storage:
+    type: "sqlite"  # memory, sqlite, postgresql, rocksdb, leveldb
+    path: "/data/actordb/events.db"  # For SQLite/RocksDB/LevelDB
+    connection_string: "host=localhost port=5432 user=actordb dbname=actordb sslmode=disable"  # For PostgreSQL
+    options:
+      max_connections: 25  # Additional options
+```
+
+## TypeScript Client
+
+ActorDB provides a full-featured TypeScript client library for easy integration:
+
+### Installation
+
+```bash
+cd client/typescript
+npm install
+npm run build
+```
+
+### Usage
+
+```typescript
+import { quickStart } from './dist';
+
+// Quick setup
+const { client, actors, queries } = quickStart('http://localhost:9090', 'your-token');
+
+// Work with actors
+const user = actors.getActor('user-123', 'user');
+await user.create();
+await user.writeEvent('user_created', { name: 'John', email: 'john@example.com' });
+
+// Query data
+const result = await queries.projectionState('user_profiles').execute();
+console.log(result.data);
+```
+
+See `client/typescript/README.md` for detailed documentation.
 
 ## MVP Validation Criteria
 

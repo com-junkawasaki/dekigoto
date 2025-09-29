@@ -1,0 +1,125 @@
+\documentclass{article}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{verbatim}
+
+\title{ActorDB: A Unified Database Model Integrating Single-Writer Actors, Incremental View Maintenance, and Zero-Trust Messaging}
+\author{Your Name}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+ActorDB is a novel database model that combines single-writer actor serialization, incremental view maintenance (IVM), and zero-trust messaging into a unified database experience. It provides an actor-based event persistence write model and a query-driven projection read model with on-demand computation. Security is a core tenant, featuring mTLS, JWS signatures, and fine-grained access control (ABAC/RBAC) with row-level security and column masking. ActorDB guarantees strong consistency within actors and eventual consistency across actors, making it suitable for modern, distributed, and secure data-intensive applications.
+\end{abstract}
+
+\section{Introduction}
+
+The increasing demand for scalable, real-time, and secure data processing systems has exposed the limitations of traditional database architectures. Modern applications require a new approach that can handle high-throughput event streams, provide low-latency query responses, and enforce granular security policies without compromising performance. ActorDB is designed to address these challenges by providing a novel architecture that unifies concepts from actor systems, event sourcing, and stream processing.
+
+ActorDB's core contributions are:
+\begin{itemize}
+    \item \textbf{Write Model}: An actor (aggregate) based event persistence model with append-only semantics, ensuring a single writer per actor for strong serialization.
+    \item \textbf{Read Model}: A flexible query-driven projection system with on-demand computation and automatic materialization promotion for optimized read performance.
+    \item \textbf{Security}: A built-in zero-trust security model using mTLS with JWS signatures, and ABAC/RBAC with RLS/column masking integrated into projections.
+    \item \textbf{Consistency}: Strong single-writer serialization within actors, with eventual consistency across actors managed via sagas.
+\end{itemize}
+
+\section{Architecture}
+
+The architecture of ActorDB is designed around a central event store, with distinct components for querying, projections, and control. A security gateway protects access to the core components.
+
+\begin{verbatim}
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  Query Interface │    │ Projection DSL  │    │  Control Plane  │
+│   (SQL Dialect)  │    │  (IVM Engine)   │    │  (Auto-scaling) │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                        │                        │
+         └────────────────────────┼────────────────────────┘
+                                  │
+                    ┌─────────────────┐
+                    │ Security Gateway│
+                    │ (mTLS + JWS +  │
+                    │     ABAC)      │
+                    └─────────────────┘
+                              │
+                    ┌─────────────────┐
+                    │   Event Store   │
+                    │ (Actor-based    │
+                    │  Append-only)   │
+                    └─────────────────┘
+\end{verbatim}
+
+\section{Core Components}
+
+\subsection{EventStore}
+The EventStore is the heart of ActorDB. It provides:
+\begin{itemize}
+    \item Actor-based single-writer append-only event storage.
+    \item Snapshot management with configurable retention policies.
+    \item Efficient data storage through compression (Protobuf/Parquet) and indexing.
+\end{itemize}
+
+\subsection{Projection Engine}
+The Projection Engine is responsible for creating read models from the event store. Its key features are:
+\begin{itemize}
+    \item Incremental View Maintenance (IVM) with automatic promotion and demotion of materialized views.
+    \item Handling of late-arriving events using watermarks and correction windows.
+    \item Priority queuing to differentiate between interactive and batch workloads.
+\end{itemize}
+
+\subsection{Security Layer}
+Security is a first-class citizen in ActorDB. The security layer includes:
+\begin{itemize}
+    \item mTLS with SPIFFE for workload identity.
+    \item Short-lived JWTs with Proof-of-Possession (PoP).
+    \item Attribute-Based and Role-Based Access Control (ABAC/RBAC) with Row-Level Security (RLS) and column masking.
+    \item Comprehensive audit streams for all operations.
+\end{itemize}
+
+\subsection{Query Interface}
+ActorDB provides a user-friendly query interface with:
+\begin{itemize}
+    \item A SQL-like declarative query language.
+    \item Transparent integration of Row-Level Security (RLS).
+    \item Support for temporal queries with event-time semantics.
+\end{itemize}
+
+\subsection{Control Plane}
+The Control Plane manages the operational aspects of the database:
+\begin{itemize}
+    \item Auto-scaling and shard rebalancing to handle varying loads.
+    \item Health monitoring and Service Level Objective (SLO) tracking.
+    \item Automated certificate rotation and policy distribution.
+\end{itemize}
+
+\section{Process Network Model}
+The project adheres to a strict Merkle DAG-based process network model, which is defined in a `dag.jsonnet` configuration. This model governs all operations to maintain topological consistency.
+\begin{itemize}
+    \item \textbf{Execution}: Operations follow a topological sort of the dependency DAG.
+    \item \textbf{Problem Resolution}: In case of failures, a reverse topological sort is used to identify root causes.
+    \item \textbf{Dependencies}: The model emphasizes keeping the dependency DAG minimal and stable to reduce complexity and improve robustness.
+\end{itemize}
+
+\section{MVP Validation Criteria}
+The performance targets for the Minimum Viable Product (MVP) are set to validate the architecture's capabilities:
+\begin{itemize}
+    \item \textbf{Actor Throughput}: $\geq$50-100k commands/sec/node.
+    \item \textbf{Projection Latency P99}: $\leq$200ms for on-demand queries, and $\leq$50ms for materialized views.
+    \item \textbf{Late Event Correction}: Failure rate of less than $10^{-6}$.
+    \item \textbf{Rebuild Time}: $\leq$30s for 100GB projections.
+    \item \textbf{Security Propagation}: $\leq$30s for key revocation.
+\end{itemize}
+
+\section{Conclusion}
+ActorDB presents a comprehensive solution for building modern, high-performance, and secure applications. By unifying concepts from actor systems, event sourcing, and zero-trust security, it provides a robust foundation for developers to build next-generation systems. Future work will focus on expanding the query language, optimizing the projection engine further, and exploring new consistency models.
+
+\bibliographystyle{alpha}
+\bibliography{sample}
+
+\end{document}

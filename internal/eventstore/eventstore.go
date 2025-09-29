@@ -2,6 +2,7 @@ package eventstore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -47,27 +48,40 @@ type WriteResult struct {
 // Outputs: [event_stream]
 // SLO: p99_latency_100ms
 type EventStore struct {
-	config     config.EventStoreConfig
-	actors     map[string]*ActorState
-	actorsMu   sync.RWMutex
-	eventLog   []Event // In-memory for MVP; would be persistent storage
-	eventLogMu sync.RWMutex
-	running    bool
-	ctx        context.Context
-	cancel     context.CancelFunc
+	config   config.EventStoreConfig
+	storage  Storage
+	actors   map[string]*ActorState
+	actorsMu sync.RWMutex
+	running  bool
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 // New creates a new EventStore instance
 func New(cfg config.EventStoreConfig) (*EventStore, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create storage backend
+	factory := StorageFactory{}
+	storageConfig := StorageConfig{
+		Type:             cfg.Storage.Type,
+		Path:             cfg.Storage.Path,
+		ConnectionString: cfg.Storage.ConnectionString,
+		Options:          cfg.Storage.Options,
+	}
+	storage, err := factory.NewStorage(storageConfig)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to create storage: %w", err)
+	}
+
 	es := &EventStore{
-		config:   cfg,
-		actors:   make(map[string]*ActorState),
-		eventLog: make([]Event, 0),
-		running:  false,
-		ctx:      ctx,
-		cancel:   cancel,
+		config:  cfg,
+		storage: storage,
+		actors:  make(map[string]*ActorState),
+		running: false,
+		ctx:     ctx,
+		cancel:  cancel,
 	}
 
 	return es, nil
@@ -75,8 +89,21 @@ func New(cfg config.EventStoreConfig) (*EventStore, error) {
 
 // Start begins the EventStore operation
 func (es *EventStore) Start(ctx context.Context) error {
+	// Open storage backend
+	storageConfig := map[string]interface{}{
+		"path":              es.config.Storage.Path,
+		"connection_string": es.config.Storage.ConnectionString,
+	}
+	for k, v := range es.config.Storage.Options {
+		storageConfig[k] = v
+	}
+
+	if err := es.storage.Open(ctx, storageConfig); err != nil {
+		return fmt.Errorf("failed to open storage: %w", err)
+	}
+
 	es.running = true
-	log.Printf("EventStore started with data_dir: %s", es.config.DataDir)
+	log.Printf("EventStore started with storage type: %s", es.config.Storage.Type)
 	return nil
 }
 
@@ -84,6 +111,14 @@ func (es *EventStore) Start(ctx context.Context) error {
 func (es *EventStore) Stop() {
 	es.running = false
 	es.cancel()
+
+	// Close storage backend
+	if es.storage != nil {
+		if err := es.storage.Close(context.Background()); err != nil {
+			log.Printf("Error closing storage: %v", err)
+		}
+	}
+
 	log.Println("EventStore stopped")
 }
 
@@ -94,6 +129,21 @@ func (es *EventStore) WriteEvent(ctx context.Context, event Event) (*WriteResult
 		return nil, fmt.Errorf("eventstore not running")
 	}
 
+	// Set timestamp if not provided
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
+
+	// Write to storage backend
+	if err := es.storage.WriteEvent(ctx, event); err != nil {
+		return &WriteResult{
+			AggregateID: event.AggregateID,
+			Success:     false,
+			Error:       err,
+		}, nil
+	}
+
+	// Update actor state in memory
 	es.actorsMu.Lock()
 	actor, exists := es.actors[event.AggregateID]
 	if !exists {
@@ -103,31 +153,9 @@ func (es *EventStore) WriteEvent(ctx context.Context, event Event) (*WriteResult
 		}
 		es.actors[event.AggregateID] = actor
 	}
-	es.actorsMu.Unlock()
-
-	// Validate sequence (single-writer check)
-	expectedSeq := actor.LastSequence + 1
-	if event.Sequence != expectedSeq {
-		return &WriteResult{
-			AggregateID: event.AggregateID,
-			Success:     false,
-			Error:       fmt.Errorf("sequence mismatch: expected %d, got %d", expectedSeq, event.Sequence),
-		}, nil
-	}
-
-	// Set timestamp if not provided
-	if event.Timestamp.IsZero() {
-		event.Timestamp = time.Now()
-	}
-
-	// Append to event log
-	es.eventLogMu.Lock()
-	es.eventLog = append(es.eventLog, event)
-	es.eventLogMu.Unlock()
-
-	// Update actor state
 	actor.LastSequence = event.Sequence
 	actor.LastTimestamp = event.Timestamp
+	es.actorsMu.Unlock()
 
 	// Check if snapshot is needed
 	if event.Sequence%es.config.SnapshotInterval == 0 {
@@ -152,27 +180,31 @@ func (es *EventStore) ReadEvents(ctx context.Context, aggregateID string, fromSe
 		return nil, fmt.Errorf("eventstore not running")
 	}
 
-	es.eventLogMu.RLock()
-	defer es.eventLogMu.RUnlock()
-
-	var events []Event
-	for _, event := range es.eventLog {
-		if event.AggregateID == aggregateID && event.Sequence >= fromSeq {
-			events = append(events, event)
-		}
-	}
-
-	return events, nil
+	return es.storage.ReadEvents(ctx, aggregateID, fromSeq, 0) // No limit
 }
 
 // GetActorState returns the current state of an actor
 func (es *EventStore) GetActorState(aggregateID string) (*ActorState, error) {
 	es.actorsMu.RLock()
-	defer es.actorsMu.RUnlock()
-
 	actor, exists := es.actors[aggregateID]
+	es.actorsMu.RUnlock()
+
 	if !exists {
-		return nil, fmt.Errorf("actor %s not found", aggregateID)
+		// Try to get from storage
+		lastSeq, err := es.storage.GetLastSequence(context.Background(), aggregateID)
+		if err != nil {
+			return nil, fmt.Errorf("actor %s not found: %w", aggregateID, err)
+		}
+
+		// Create in-memory state
+		actor = &ActorState{
+			AggregateID:  aggregateID,
+			LastSequence: lastSeq,
+		}
+
+		es.actorsMu.Lock()
+		es.actors[aggregateID] = actor
+		es.actorsMu.Unlock()
 	}
 
 	// Return a copy to prevent external modification
@@ -180,20 +212,36 @@ func (es *EventStore) GetActorState(aggregateID string) (*ActorState, error) {
 	return &state, nil
 }
 
-// createSnapshot creates a snapshot for an actor (MVP: in-memory)
+// createSnapshot creates a snapshot for an actor
 func (es *EventStore) createSnapshot(aggregateID string, sequence int64) error {
-	// MVP: Just log the snapshot creation
-	// In production: serialize actor state and persist
-	log.Printf("Creating snapshot for actor %s at sequence %d", aggregateID, sequence)
+	// Get actor state
+	actor, err := es.GetActorState(aggregateID)
+	if err != nil {
+		return fmt.Errorf("failed to get actor state: %w", err)
+	}
+
+	// Serialize actor state
+	snapshotData, err := json.Marshal(actor)
+	if err != nil {
+		return fmt.Errorf("failed to marshal actor state: %w", err)
+	}
+
+	// Write snapshot to storage
+	if err := es.storage.WriteSnapshot(context.Background(), aggregateID, sequence, snapshotData); err != nil {
+		return fmt.Errorf("failed to write snapshot: %w", err)
+	}
+
+	log.Printf("Created snapshot for actor %s at sequence %d", aggregateID, sequence)
 	return nil
 }
 
 // GetAllEvents returns all events (for testing/debugging)
 func (es *EventStore) GetAllEvents() []Event {
-	es.eventLogMu.RLock()
-	defer es.eventLogMu.RUnlock()
+	// This is inefficient for production use - only for testing
+	if memStorage, ok := es.storage.(*MemoryStorage); ok {
+		return memStorage.GetAllEvents()
+	}
 
-	events := make([]Event, len(es.eventLog))
-	copy(events, es.eventLog)
-	return events
+	// For other storages, return empty slice (not implemented for performance)
+	return []Event{}
 }

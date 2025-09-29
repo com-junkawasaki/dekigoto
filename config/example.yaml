@@ -16,6 +16,12 @@ eventstore:
   retention_period: "30d"
   compression: "parquet"  # or "protobuf"
   max_concurrent_writes: 1000
+  storage:
+    type: "memory"  # memory, sqlite, postgresql, rocksdb, leveldb
+    path: "/data/actordb/storage"
+    connection_string: "host=localhost port=5432 user=actordb dbname=actordb sslmode=disable"
+    options:
+      max_connections: 25
 
 # Projection Engine Configuration
 projection:
