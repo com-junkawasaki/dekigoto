@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 /// Security context for authenticated users
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,7 +90,7 @@ impl SecurityGateway {
     pub fn new(config: SecurityConfig) -> Result<Self> {
         // Validate configuration
         if config.jws_secret.is_empty() {
-            return Err(ActorDBError::Config(crate::config::ConfigError::Invalid(
+            return Err(ActorDBError::Config(config::ConfigError::Message(
                 "JWS secret cannot be empty".to_string()
             )));
         }
@@ -238,7 +238,7 @@ impl SecurityGateway {
         let encoding_key = EncodingKey::from_secret(self.config.jws_secret.as_bytes());
 
         encode(&header, &claims, &encoding_key)
-            .map_err(|e| ActorDBError::Security(format!("Failed to encode token: {}", e)))
+            .map_err(|e| ActorDBError::Security(SecurityError::Generic(format!("Failed to encode token: {}", e))))
     }
 
     /// Send audit event
@@ -404,4 +404,10 @@ mod tests {
 
         gateway.stop().await.unwrap();
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SecurityError {
+    #[error("Security error: {0}")]
+    Generic(String),
 }

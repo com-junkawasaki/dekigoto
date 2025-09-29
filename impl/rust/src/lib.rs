@@ -7,11 +7,18 @@
 //! defined in `dag.jsonnet`, ensuring topological consistency in execution.
 
 pub mod config;
-mod security;
-mod eventstore;
-mod projector;
-mod query;
-mod control;
+pub mod security;
+pub mod eventstore;
+pub mod projector;
+pub mod query;
+pub mod control;
+
+// Re-export error types for use in ActorDBError
+pub use security::SecurityError;
+pub use eventstore::EventStoreError;
+pub use projector::ProjectorError;
+pub use query::QueryError;
+pub use control::ControlError;
 
 /// Core types shared across modules
 pub mod types {
@@ -62,6 +69,7 @@ pub mod types {
 /// Error types used throughout the system
 pub mod error {
     use thiserror::Error;
+    use crate::{SecurityError, EventStoreError, ProjectorError, QueryError, ControlError};
 
     #[derive(Error, Debug)]
     pub enum ActorDBError {
@@ -69,19 +77,19 @@ pub mod error {
         Config(#[from] config::ConfigError),
 
         #[error("Security error: {0}")]
-        Security(#[from] security::SecurityError),
+        Security(#[from] SecurityError),
 
         #[error("EventStore error: {0}")]
-        EventStore(#[from] eventstore::EventStoreError),
+        EventStore(#[from] EventStoreError),
 
         #[error("Projector error: {0}")]
-        Projector(#[from] projector::ProjectorError),
+        Projector(#[from] ProjectorError),
 
         #[error("Query error: {0}")]
-        Query(#[from] query::QueryError),
+        Query(#[from] QueryError),
 
         #[error("Control plane error: {0}")]
-        Control(#[from] control::ControlError),
+        Control(#[from] ControlError),
 
         #[error("IO error: {0}")]
         Io(#[from] std::io::Error),
