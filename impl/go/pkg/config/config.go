@@ -65,6 +65,7 @@ type SecurityConfig struct {
 	JWSSecret          string `yaml:"jws_secret"`
 	AuditStreamEnabled bool   `yaml:"audit_stream_enabled"`
 	SPIFFETrustDomain  string `yaml:"spiffe_trust_domain"`
+	ListenAddr         string `yaml:"listen_addr,omitempty"`
 }
 
 // QueryConfig configures the query interface

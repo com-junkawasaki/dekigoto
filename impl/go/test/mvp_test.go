@@ -5,11 +5,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/junkawasaki/actordb-dokigoto/internal/eventstore"
 	"github.com/junkawasaki/actordb-dokigoto/internal/projector"
 	"github.com/junkawasaki/actordb-dokigoto/internal/security"
 	"github.com/junkawasaki/actordb-dokigoto/pkg/config"
 )
+
+// createTestJWT creates a valid JWT token for testing
+func createTestJWT(secret string) (string, error) {
+	claims := security.CustomClaims{
+		TenantID:   "test-tenant",
+		Roles:      []string{"read", "write"},
+		Attributes: map[string]interface{}{"department": "testing"},
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "test-issuer",
+			Subject:   "test-user",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
 
 // TestMVPActorWrite tests basic actor-based event writing
 func TestMVPActorWrite(t *testing.T) {
@@ -160,8 +179,10 @@ func TestMVPSecurity(t *testing.T) {
 		MTLSEnabled:        false, // Disable for test
 		JWTIssuer:          "test-issuer",
 		JWTLifetimeSec:     300,
+		JWSSecret:          "test-secret",
 		AuditStreamEnabled: true,
 		SPIFFETrustDomain:  "test.org",
+		ListenAddr:         ":8444", // Use different port for test
 	}
 
 	sg, err := security.NewGateway(cfg)
@@ -174,8 +195,14 @@ func TestMVPSecurity(t *testing.T) {
 	}
 	defer sg.Stop()
 
+	// Create a valid test token
+	testToken, err := createTestJWT("test-secret")
+	if err != nil {
+		t.Fatalf("Failed to create test token: %v", err)
+	}
+
 	// Test token validation
-	result, err := sg.ValidateToken(context.Background(), "valid-token")
+	result, err := sg.ValidateToken(context.Background(), testToken)
 	if err != nil {
 		t.Fatalf("Token validation error: %v", err)
 	}
@@ -189,7 +216,7 @@ func TestMVPSecurity(t *testing.T) {
 	}
 
 	// Test permission check
-	if !sg.CheckPermission(result.Context, "test", "read") {
+	if !sg.CheckPermission(result.Context, "read") {
 		t.Error("Expected permission check to pass")
 	}
 }

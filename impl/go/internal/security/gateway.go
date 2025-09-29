@@ -90,6 +90,8 @@ func NewGateway(cfg config.SecurityConfig) (*SecurityGateway, error) {
 			"admin":  {"read", "write", "admin:access"},
 			"user":   {"read"},
 			"reader": {"read"},
+			"read":   {"read"},
+			"write":  {"read", "write"},
 		},
 	}
 
@@ -117,8 +119,13 @@ func (sg *SecurityGateway) Start(ctx context.Context) error {
 	mux.HandleFunc("/validate", sg.handleValidateToken)
 	mux.HandleFunc("/health", sg.handleHealth)
 
+	listenAddr := ":8443" // Default port
+	if sg.config.ListenAddr != "" {
+		listenAddr = sg.config.ListenAddr
+	}
+
 	sg.server = &http.Server{
-		Addr:         ":8443", // Security service port
+		Addr:         listenAddr,
 		Handler:      mux,
 		TLSConfig:    sg.tlsConfig,
 		ReadTimeout:  10 * time.Second,
@@ -128,10 +135,10 @@ func (sg *SecurityGateway) Start(ctx context.Context) error {
 	go func() {
 		var err error
 		if sg.config.MTLSEnabled {
-			log.Println("Starting SecurityGateway with mTLS on :8443")
+			log.Printf("Starting SecurityGateway with mTLS on %s", listenAddr)
 			err = sg.server.ListenAndServeTLS("", "")
 		} else {
-			log.Println("Starting SecurityGateway on :8443")
+			log.Printf("Starting SecurityGateway on %s", listenAddr)
 			err = sg.server.ListenAndServe()
 		}
 		if err != nil && err != http.ErrServerClosed {
