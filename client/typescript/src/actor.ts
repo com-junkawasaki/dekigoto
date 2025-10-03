@@ -169,6 +169,88 @@ export class CommandBus {
   }
 }
 
+// Merkle DAG: supabase_style_client -> fluent_api_facade
+// A high-level, Supabase-like client that provides a fluent API.
+// It's configured with a domain schema and hides the underlying complexity
+// of the CommandBus and TypedActorManagers.
+
+type AnySchema = {
+  aggregates: Record<string, { manager: { getHandle: (...args: any) => any } }>;
+  commands: Record<string, { commandClass: new (...args: any) => any }>;
+};
+
+type ActorName<S extends AnySchema> = keyof S['aggregates'];
+type CommandName<S extends AnySchema> = keyof S['commands'];
+
+// Helper to extract constructor parameters, skipping the first one (usually the type string)
+type CommandPayload<T> = T extends new (type: any, ...args: infer P) => any ? P : never;
+
+
+export class SupabaseStyleClient<TSchema extends AnySchema> {
+  private schema: TSchema;
+  private bus: CommandBus;
+
+  constructor(schema: TSchema, bus: CommandBus) {
+    this.schema = schema;
+    this.bus = bus;
+  }
+
+  /**
+   * Access an actor by its type and ID.
+   * @param actorName The name of the actor type (e.g., 'todoItem').
+   * @param id The unique ID of the actor instance.
+   * @returns An ActorHandle for performing actions on the actor.
+   */
+  actor<T extends ActorName<TSchema>>(actorName: T, id: string) {
+    type ActorCommands = Extract<CommandName<TSchema>, `${T & string}.${string}`>;
+
+    return {
+      /**
+       * Dispatches a command to this actor.
+       * @param commandName The name of the command to dispatch (e.g., 'complete').
+       * @param payload The payload for the command.
+       */
+      dispatch: async <C extends ActorCommands>(
+        commandName: C,
+        ...payload: CommandPayload<TSchema['commands'][C]['commandClass']>
+      ) => {
+        const commandConfig = this.schema.commands[commandName];
+        if (!commandConfig) {
+          throw new Error(`Unknown command: ${String(commandName)}`);
+        }
+
+        // The first argument to the command constructor is the ID, by convention.
+        const command = new commandConfig.commandClass(id, ...payload);
+
+        try {
+          await this.bus.send(command);
+          return { data: true, error: null };
+        } catch (error) {
+          return { data: null, error: error as Error };
+        }
+      },
+
+      /**
+       * Retrieves the current state-aware handle for the actor.
+       */
+      get: async () => {
+        const aggregateConfig = this.schema.aggregates[actorName];
+        if (!aggregateConfig) {
+          throw new Error(`Unknown aggregate type: ${String(actorName)}`);
+        }
+        try {
+          const data = await aggregateConfig.manager.getHandle(id, actorName as string);
+          return { data, error: null };
+        } catch (error) {
+          return { data: null, error: error as Error };
+        }
+      },
+    };
+  }
+
+  // projection(name: string) { ... }
+}
+
 
 // Merkle DAG: typed_actor_manager -> state_session_orm
 // A generic manager that acts as a State-Session-ORM for actors.
