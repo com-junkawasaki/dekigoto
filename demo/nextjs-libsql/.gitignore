@@ -19,8 +19,6 @@ build/
 # Database
 *.db
 *.db-journal
-actordb.db
-actordb.db-*
 
 # IDE
 .vscode/
