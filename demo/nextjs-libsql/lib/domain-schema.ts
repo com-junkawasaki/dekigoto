@@ -4,8 +4,7 @@
 // defined for a database ORM.
 
 import { ReducerAggregate } from '@client/actor';
-import { todoItemReducer, todoItemInitialState } from './aggregates/todo-reducer';
-import { todoItemManager } from './aggregates/todo-manager'; // We will create this
+import { todoItemReducer, todoItemInitialState, todoItemManager } from './aggregates/todo';
 
 import {
   CompleteTodoItemCommand,

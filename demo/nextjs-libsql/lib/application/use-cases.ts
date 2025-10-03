@@ -1,5 +1,5 @@
 import { ICommand, ICommandHandler } from "@client/actor";
-import { todoItemManager } from "../../aggregates/todo-aggregate";
+import { todoItemManager } from "../../aggregates/todo";
 
 // --- Command ---
 export class CompleteTodoItemCommand implements ICommand {
