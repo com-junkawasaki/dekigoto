@@ -1,9 +1,8 @@
-// Merkle DAG: todo_actions -> server_operations
-// Server Actions for TODO CRUD operations
+// Merkle DAG: todo_actions -> event_sourced_operations
+// Server Actions for event-sourced TODO operations using ActorDB
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createTodoItem, updateTodoItem, deleteTodoItem } from '@/utils/supabase/todo'
 
 // Server Action for creating a new TODO item
 export async function createTodo(formData: FormData) {
@@ -18,17 +17,34 @@ export async function createTodo(formData: FormData) {
     throw new Error('Title and list ID are required')
   }
 
-  const todoData = {
-    list_id: listId,
+  const itemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+  const eventData = {
+    type: 'item' as const,
+    itemId,
+    listId,
     title,
     description: description || undefined,
     priority: (priority as 'low' | 'medium' | 'high') || 'medium',
-    due_date: dueDate || undefined,
-    tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : []
+    dueDate: dueDate || undefined,
+    tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
+    userId: 'current_user' // TODO: Get from auth context
   }
 
   try {
-    await createTodoItem(todoData)
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/todo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventData),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to create todo item')
+    }
+
     revalidatePath('/todo')
   } catch (error) {
     console.error('Failed to create todo:', error)
@@ -36,17 +52,26 @@ export async function createTodo(formData: FormData) {
   }
 }
 
-// Server Action for updating a TODO item
+// Server Action for updating a TODO item status
 export async function updateTodoStatus(id: string, status: 'pending' | 'in_progress' | 'completed' | 'cancelled') {
   try {
-    const updates: { status: 'pending' | 'in_progress' | 'completed' | 'cancelled'; completed_at?: string } = { status }
-    if (status === 'completed') {
-      updates.completed_at = new Date().toISOString()
-    } else {
-      // Don't set completed_at for non-completed status
+    const requestBody = status === 'completed'
+      ? { action: 'complete' }
+      : { status }
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/todo/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to update todo item')
     }
 
-    await updateTodoItem(id, updates)
     revalidatePath('/todo')
   } catch (error) {
     console.error('Failed to update todo status:', error)
@@ -57,7 +82,15 @@ export async function updateTodoStatus(id: string, status: 'pending' | 'in_progr
 // Server Action for deleting a TODO item
 export async function deleteTodo(id: string) {
   try {
-    await deleteTodoItem(id)
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/todo/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to delete todo item')
+    }
+
     revalidatePath('/todo')
   } catch (error) {
     console.error('Failed to delete todo:', error)

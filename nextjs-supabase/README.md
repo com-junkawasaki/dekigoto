@@ -12,7 +12,9 @@ This is a Next.js application with Supabase authentication, built as an example 
 - **Tailwind CSS** for styling
 - **ActorDB Integration Ready** - prepared for event-driven architecture
 - **TODO Task Management** - Complete CRUD application with lists and items
+- **Event-Sourced TODO** - ActorDB-powered TODO with event sourcing
 - **ActorDB Migration Tools** - Migrate existing ActorDB data to Supabase
+- **TypeScript Integration** - Full ActorDB TypeScript implementation
 
 ## Architecture
 
