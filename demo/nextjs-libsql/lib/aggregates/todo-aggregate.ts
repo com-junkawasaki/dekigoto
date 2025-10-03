@@ -15,7 +15,131 @@ import {
   TodoItemCompletedEventData,
   TodoItemDeletedEventData,
 } from '../events/todo-events'
-import { AggregateRoot, projectFromEvents } from '../../../../client/typescript/src/actor';
+import { 
+  AggregateRoot, 
+  projectFromEvents,
+  TypedActorManager,
+  StateHandlerMap,
+} from '../../../../client/typescript/src/actor';
+import { Actor } from '../actordb/actor';
+import { WriteResult } from '../actordb/types';
+import { client } from '../database/config';
+
+// Merkle DAG: typed_actor_handle -> fsm_state_types
+// By defining distinct types for each state, we can create handles
+// that only expose valid methods for that state, inspired by Statecharts.
+
+// Base type for all states
+export interface TodoItemState extends TodoItem {
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+}
+
+// State-specific types
+export interface PendingTodoItem extends TodoItemState {
+  status: 'pending' | 'in_progress';
+}
+export interface CompletedTodoItem extends TodoItemState {
+  status: 'completed';
+}
+export interface CancelledTodoItem extends TodoItemState {
+  status: 'cancelled';
+}
+
+// Type guard to check if a todo is in a pending state
+function isPending(todo: TodoItemState | null): todo is PendingTodoItem {
+  return todo?.status === 'pending' || todo?.status === 'in_progress';
+}
+
+// Type guard to check if a todo is completed
+function isCompleted(todo: TodoItemState | null): todo is CompletedTodoItem {
+  return todo?.status === 'completed';
+}
+
+
+// --- Type-Safe Actor Handles ---
+// These handles expose methods based on the actor's current state.
+
+interface BaseTodoItemActorHandle {
+  state: TodoItemState;
+  actor: Actor;
+}
+
+export interface PendingTodoItemActorHandle extends BaseTodoItemActorHandle {
+  state: PendingTodoItem;
+  update: (updates: TodoItemUpdatedEventData['updates']) => Promise<WriteResult>;
+  complete: () => Promise<WriteResult>;
+  delete: () => Promise<WriteResult>;
+}
+
+export interface CompletedTodoItemActorHandle extends BaseTodoItemActorHandle {
+  state: CompletedTodoItem;
+  delete: () => Promise<WriteResult>;
+  // Note: `update` and `complete` methods are not available here.
+}
+
+export interface CancelledTodoItemActorHandle extends BaseTodoItemActorHandle {
+  state: CancelledTodoItem;
+  // No actions are possible on a cancelled item.
+}
+
+// A union of all possible handles
+export type TypedTodoItemActorHandle =
+  | PendingTodoItemActorHandle
+  | CompletedTodoItemActorHandle
+  | CancelledTodoItemActorHandle;
+
+
+// --- ORM Configuration for TodoItem ---
+
+const todoItemHandlerMap: StateHandlerMap<TodoItemState, { state: TodoItemState; actor: Actor }> = {
+  pending: (base) => ({
+    ...base,
+    state: base.state as PendingTodoItem,
+    update: (updates) =>
+      base.actor.writeEvent('todo_item_updated', {
+        type: 'todo_item_updated',
+        itemId: base.actor.getAggregateId(),
+        updates,
+      }),
+    complete: () =>
+      base.actor.writeEvent('todo_item_completed', {
+        type: 'todo_item_completed',
+        itemId: base.actor.getAggregateId(),
+        completedAt: new Date().toISOString(),
+      }),
+    delete: () =>
+      base.actor.writeEvent('todo_item_deleted', {
+        type: 'todo_item_deleted',
+        itemId: base.actor.getAggregateId(),
+      }),
+  }),
+  in_progress: (base) => todoItemHandlerMap.pending(base), // Treat in_progress the same as pending
+  completed: (base) => ({
+    ...base,
+    state: base.state as CompletedTodoItem,
+    delete: () =>
+      base.actor.writeEvent('todo_item_deleted', {
+        type: 'todo_item_deleted',
+        itemId: base.actor.getAggregateId(),
+      }),
+  }),
+  cancelled: (base) => ({
+    ...base,
+    state: base.state as CancelledTodoItem,
+  }),
+};
+
+/**
+ * The configured State-Session-ORM for TodoItem actors.
+ * This manager is the primary entry point for interacting with TodoItem aggregates.
+ */
+export const todoItemManager = new TypedActorManager(
+  client,
+  TodoItemAggregate,
+  (state) => state.status,
+  todoItemHandlerMap
+);
+
 
 // Current state interfaces
 export interface TodoList {
@@ -157,6 +281,69 @@ export function createTodoItemFromEvents(events: Event[]): TodoItem | null {
   if (finalState.status === 'cancelled') return null;
   return finalState;
 }
+
+/**
+ * High-level factory to get a type-safe handle for a TodoItem actor.
+ * This is the primary entry point for interacting with a specific TodoItem.
+ */
+export async function getTypedTodoItemActor(
+  actor: Actor,
+  events: Event[]
+): Promise<TypedTodoItemActorHandle | null> {
+  const aggregate = new TodoItemAggregate(actor.getAggregateId(), events);
+  const state = aggregate.getState() as TodoItemState;
+
+  await actor.loadSequence();
+  const currentSequence = actor.getSequence();
+
+  const baseHandle = { state, actor };
+
+  if (isPending(state)) {
+    return {
+      ...baseHandle,
+      state,
+      update: (updates) =>
+        actor.writeEvent('todo_item_updated', {
+          type: 'todo_item_updated',
+          itemId: actor.getAggregateId(),
+          updates,
+        }),
+      complete: () =>
+        actor.writeEvent('todo_item_completed', {
+          type: 'todo_item_completed',
+          itemId: actor.getAggregateId(),
+          completedAt: new Date().toISOString(),
+        }),
+      delete: () =>
+        actor.writeEvent('todo_item_deleted', {
+          type: 'todo_item_deleted',
+          itemId: actor.getAggregateId(),
+        }),
+    };
+  }
+
+  if (isCompleted(state)) {
+    return {
+      ...baseHandle,
+      state,
+      delete: () =>
+        actor.writeEvent('todo_item_deleted', {
+          type: 'todo_item_deleted',
+          itemId: actor.getAggregateId(),
+        }),
+    };
+  }
+  
+  if (state && state.status === 'cancelled') {
+    return {
+      ...baseHandle,
+      state: state as CancelledTodoItem,
+    };
+  }
+
+  return null;
+}
+
 
 // Helper functions for working with aggregates
 export function getAllTodoLists(events: Event[]): TodoList[] {

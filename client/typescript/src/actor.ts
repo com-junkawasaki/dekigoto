@@ -116,6 +116,84 @@ export function projectFromEvents<S extends object, E extends Event>(
   return result;
 }
 
+// Merkle DAG: typed_actor_manager -> state_session_orm
+// A generic manager that acts as a State-Session-ORM for actors.
+// It takes an aggregate's definition and provides type-safe handles
+// corresponding to the aggregate's current state.
+
+/**
+ * A map defining how to create a state-specific handle.
+ * The keys are state names (e.g., 'pending'), and the values are functions
+ * that create the handle for that state.
+ */
+export type StateHandlerMap<TState, TBaseHandle> = {
+  [state: string]: (baseHandle: TBaseHandle) => any;
+};
+
+/**
+ * A function that extracts the state name (as a string) from a state object.
+ */
+export type StateAccessor<TState> = (state: TState) => string;
+
+export class TypedActorManager<
+  TState extends object,
+  TAggregate extends AggregateRoot<TState, any>
+> {
+  private client: ActorDBClient;
+  private aggregateClass: new (id: string, events: Event[]) => TAggregate;
+  private stateAccessor: StateAccessor<TState>;
+  private handlerMap: StateHandlerMap<TState, { state: TState; actor: Actor }>;
+
+  constructor(
+    client: ActorDBClient,
+    aggregateClass: new (id: string, events: Event[]) => TAggregate,
+    stateAccessor: StateAccessor<TState>,
+    handlerMap: StateHandlerMap<TState, { state: TState; actor: Actor }>
+  ) {
+    this.client = client;
+    this.aggregateClass = aggregateClass;
+    this.stateAccessor = stateAccessor;
+    this.handlerMap = handlerMap;
+  }
+
+  /**
+   * Retrieves a type-safe handle for a given actor ID.
+   * The type of the returned handle depends on the actor's current state.
+   * @param aggregateId The ID of the aggregate.
+   * @param aggregateType The type of the aggregate.
+   * @returns A promise that resolves to a state-specific handle, or null if not found.
+   */
+  public async getHandle(aggregateId: string, aggregateType: string) {
+    const actor = new Actor(this.client, aggregateId, aggregateType);
+    const events = await actor.readEvents();
+
+    if (events.length === 0) {
+      return null;
+    }
+
+    const aggregate = new this.aggregateClass(aggregateId, events);
+    const state = aggregate.getState();
+
+    // Return null if state is invalid (e.g., for a deleted aggregate)
+    if (!state) {
+        return null;
+    }
+    
+    const stateName = this.stateAccessor(state);
+    const handlerFactory = this.handlerMap[stateName];
+
+    if (handlerFactory) {
+      await actor.loadSequence(); // Ensure sequence is loaded for subsequent writes
+      const baseHandle = { state, actor };
+      return handlerFactory(baseHandle) as ReturnType<typeof handlerFactory>;
+    }
+
+    // Return a base handle if no specific handler is found for the state
+    return { state, actor };
+  }
+}
+
+
 /**
  * High-level Actor abstraction for easier interaction with aggregates
  */
