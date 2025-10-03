@@ -20,9 +20,9 @@ import {
   projectFromEvents,
   TypedActorManager,
   StateHandlerMap,
-} from '../../../../client/typescript/src/actor';
-import { Actor } from '../actordb/actor';
-import { WriteResult } from '../actordb/types';
+} from '@client/actor';
+import { Actor } from '@client/actor';
+import { WriteResult } from '@client/types';
 import { client } from '../database/config';
 
 // Merkle DAG: typed_actor_handle -> fsm_state_types

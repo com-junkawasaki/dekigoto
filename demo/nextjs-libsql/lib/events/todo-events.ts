@@ -1,8 +1,8 @@
 // Merkle DAG: todo_events -> event_definitions
 // Event definitions for TODO application with event sourcing
 
-import { Event } from '../actordb/eventstore'
-import { EventFactory } from '../../../../client/typescript/src/actor';
+import { Event } from '@client/types';
+import { EventFactory } from '@client/actor';
 
 // Base event interface for TODO events
 export interface TodoEvent extends Omit<Event, 'data'> {
