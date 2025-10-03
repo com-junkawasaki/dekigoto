@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
+import { createClient } from '@/utils/supabase/server-utils'
 import Link from 'next/link'
 
 // Merkle DAG: protected_app -> server_auth_check
@@ -53,7 +53,16 @@ export default async function ProtectedApp() {
                 <li>• DAG-based routing</li>
                 <li>• ActorDB integration ready</li>
                 <li>• Secure session management</li>
+                <li>• TODO task management</li>
               </ul>
+              <div className="mt-4">
+                <Link
+                  href="/todo"
+                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Try TODO App →
+                </Link>
+              </div>
             </div>
           </div>
 

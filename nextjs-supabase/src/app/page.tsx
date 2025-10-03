@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
+import { createClient } from '@/utils/supabase/server-utils'
 import Link from 'next/link'
 
 // Merkle DAG: home_page -> auth_state_display

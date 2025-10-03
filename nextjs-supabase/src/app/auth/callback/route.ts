@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
+import { createClient } from '@/utils/supabase/server-utils'
 import { NextResponse } from 'next/server'
 
 // Merkle DAG: auth_callback -> oauth_redirect_handler

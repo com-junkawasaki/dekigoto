@@ -11,6 +11,8 @@ This is a Next.js application with Supabase authentication, built as an example 
 - **TypeScript** throughout the application
 - **Tailwind CSS** for styling
 - **ActorDB Integration Ready** - prepared for event-driven architecture
+- **TODO Task Management** - Complete CRUD application with lists and items
+- **ActorDB Migration Tools** - Migrate existing ActorDB data to Supabase
 
 ## Architecture
 
@@ -77,6 +79,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 
 ### Protected Routes
 - `/app` - Main application dashboard (requires Φ=0)
+- `/todo` - TODO task management application
 
 ### Middleware Protection
 The middleware automatically handles:
@@ -84,6 +87,57 @@ The middleware automatically handles:
 - Φ-monotonic routing (Φ decreasing only)
 - Redirect loop protection (max 3 redirects)
 - Fallback to safe error page
+
+## TODO Task Management
+
+The example includes a complete TODO application with:
+
+### Features
+- **Multiple Lists**: Organize tasks into different lists
+- **Task CRUD**: Create, read, update, delete tasks
+- **Priority Levels**: Low, medium, high priority tasks
+- **Due Dates**: Set deadlines for tasks
+- **Tags**: Categorize tasks with tags
+- **Status Tracking**: Pending, in progress, completed, cancelled
+- **Statistics Dashboard**: Overview of task completion status
+- **Real-time Updates**: Immediate UI updates after changes
+
+### Database Schema
+The TODO application uses Row Level Security (RLS) to ensure users can only access their own data:
+
+- `todo_lists` - Task lists owned by users
+- `todo_items` - Individual tasks within lists
+- Automatic default list creation for new users
+
+## ActorDB Migration
+
+### Migration Tools
+
+The project includes migration tools to transfer ActorDB data to Supabase:
+
+```bash
+# Build the migration tool
+cd tools/migration
+go build -o migration-tool main.go
+
+# Run migration
+./migration-tool <source_config.yaml> <supabase_host> <supabase_password>
+```
+
+### Database Schema
+
+The migration creates the following tables in Supabase:
+
+- `actordb_events` - Event store for ActorDB events
+- `actordb_snapshots` - Actor state snapshots
+- `todo_lists` - TODO application lists
+- `todo_items` - TODO application items
+
+### Migration Process
+
+1. **Schema Creation**: Run the SQL migrations in `supabase/migrations/`
+2. **Data Transfer**: Use the Go migration tool to transfer events
+3. **Verification**: Check data integrity after migration
 
 ## Project Structure
 

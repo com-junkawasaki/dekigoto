@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
+import { createClient } from '@/utils/supabase/server-utils'
 import { NextRequest, NextResponse } from 'next/server'
 
 // Merkle DAG: auth_confirm -> email_verification
