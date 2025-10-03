@@ -155,6 +155,19 @@
       framework: 'nextjs_15_app_router',
       authentication: 'supabase_ssr_phi_routing',
       merkle_hash: 'sha256:nextjs_supabase_example_v1'
+    },
+
+    nextjs_libsql: {
+      id: 'nextjs_libsql_example',
+      description: 'Next.js + LibSQL event-sourced Todo application with ActorDB',
+      dependencies: ['write_aggregate', 'projection_engine', 'query_interface'],
+      outputs: ['event_sourced_todos', 'materialized_views', 'event_stream_debugger'],
+      security: 'event_based_audit',
+      framework: 'nextjs_15_app_router',
+      database: 'libsql_embedded',
+      event_sourcing: 'actordb_single_writer',
+      projections: 'incremental_view_maintenance',
+      merkle_hash: 'sha256:nextjs_libsql_example_v1'
     }
   },
 
