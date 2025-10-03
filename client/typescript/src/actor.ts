@@ -1,6 +1,81 @@
 import { ActorDBClient } from './client';
 import { Event, WriteResult } from './types';
 
+// Merkle DAG: aggregate_root -> event_handler_pattern
+// Generic AggregateRoot to reduce boilerplate in event-sourced systems.
+export abstract class AggregateRoot<S extends object, EData extends { type: string }> {
+  public readonly id: string;
+  protected state: S;
+  private handlers: Map<string, (state: S, data: EData) => S> = new Map();
+
+  constructor(id: string, initialState: S) {
+    this.id = id;
+    this.state = initialState;
+  }
+
+  protected register<T extends EData>(
+    eventType: T['type'],
+    handler: (state: S, data: T) => S
+  ) {
+    this.handlers.set(eventType, handler as (state: S, data: EData) => S);
+  }
+
+  public apply(data: EData): void {
+    const handler = this.handlers.get(data.type);
+    if (handler) {
+      this.state = handler(this.state, data);
+    }
+  }
+
+  public applyAll(events: Event[]): void {
+    events.forEach(event => this.apply(event.data as EData));
+  }
+
+  public getState(): S {
+    return this.state;
+  }
+}
+
+/**
+ * Projects a list of states from a stream of events.
+ *
+ * @param events The stream of events.
+ * @param aggregateType The type of aggregate to project.
+ * @param aggregateFactory A function that creates a new aggregate from an ID and a list of events.
+ * @returns A list of aggregate states.
+ */
+export function projectFromEvents<S extends object, E extends Event>(
+  events: E[],
+  aggregateType: string,
+  aggregateFactory: (id: string, events: E[]) => AggregateRoot<S, any>
+): S[] {
+  const aggregates = new Map<string, E[]>();
+
+  // Group events by aggregate ID
+  for (const event of events) {
+    if (event.aggregateType === aggregateType) {
+      const id = event.aggregateId;
+      if (!aggregates.has(id)) {
+        aggregates.set(id, []);
+      }
+      aggregates.get(id)!.push(event);
+    }
+  }
+
+  // Create aggregates from event groups and get their state
+  const result: S[] = [];
+  for (const [id, aggregateEvents] of aggregates) {
+    const aggregate = aggregateFactory(id, aggregateEvents);
+    const state = aggregate.getState();
+    // Assuming the factory returns null for deleted/invalid aggregates
+    if (state && !(state as any).status?.includes('cancelled')) {
+      result.push(state);
+    }
+  }
+
+  return result;
+}
+
 /**
  * High-level Actor abstraction for easier interaction with aggregates
  */

@@ -8,8 +8,14 @@ import {
   isTodoItemCreatedEvent,
   isTodoItemUpdatedEvent,
   isTodoItemCompletedEvent,
-  isTodoItemDeletedEvent
+  isTodoItemDeletedEvent,
+  TodoListCreatedEventData,
+  TodoItemCreatedEventData,
+  TodoItemUpdatedEventData,
+  TodoItemCompletedEventData,
+  TodoItemDeletedEventData,
 } from '../events/todo-events'
+import { AggregateRoot, projectFromEvents } from '../../../../client/typescript/src/actor';
 
 // Current state interfaces
 export interface TodoList {
@@ -39,153 +45,126 @@ export interface TodoItem {
 }
 
 // Aggregate classes for state reconstruction
-export class TodoListAggregate {
-  private state: TodoList | null = null
+export class TodoListAggregate extends AggregateRoot<TodoList, TodoEventData> {
+  constructor(id: string, events: Event[]) {
+    const initialState: TodoList = {
+      id: '',
+      userId: '',
+      title: '',
+      color: '',
+      isDefault: false,
+      createdAt: '',
+      updatedAt: '',
+    };
+    super(id, initialState);
 
-  constructor(events: Event[]) {
-    this.applyEvents(events)
+    this.register<TodoListCreatedEventData>('todo_list_created', this.onTodoListCreated);
+
+    this.applyAll(events);
   }
 
-  private applyEvents(events: Event[]): void {
-    for (const event of events) {
-      this.applyEvent(event.data as TodoEventData)
-    }
-  }
-
-  private applyEvent(data: TodoEventData): void {
-    if (isTodoListCreatedEvent(data)) {
-      this.state = {
-        id: data.listId,
-        userId: data.userId,
-        title: data.title,
-        description: data.description,
-        color: data.color,
-        isDefault: data.isDefault,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    }
-  }
-
-  getState(): TodoList | null {
-    return this.state
+  private onTodoListCreated(_state: TodoList, data: TodoListCreatedEventData): TodoList {
+    return {
+      id: data.listId,
+      userId: data.userId,
+      title: data.title,
+      description: data.description,
+      color: data.color,
+      isDefault: data.isDefault,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
   }
 }
 
-export class TodoItemAggregate {
-  private state: TodoItem | null = null
+export class TodoItemAggregate extends AggregateRoot<TodoItem, TodoEventData> {
+  constructor(id: string, events: Event[]) {
+    const initialState: TodoItem = {
+      id: '',
+      listId: '',
+      userId: '',
+      title: '',
+      priority: 'low',
+      status: 'pending',
+      tags: [],
+      createdAt: '',
+      updatedAt: '',
+    };
+    super(id, initialState);
 
-  constructor(events: Event[]) {
-    this.applyEvents(events)
+    this.register<TodoItemCreatedEventData>('todo_item_created', this.onTodoItemCreated);
+    this.register<TodoItemUpdatedEventData>('todo_item_updated', this.onTodoItemUpdated);
+    this.register<TodoItemCompletedEventData>('todo_item_completed', this.onTodoItemCompleted);
+    this.register<TodoItemDeletedEventData>('todo_item_deleted', this.onTodoItemDeleted);
+
+    this.applyAll(events);
   }
 
-  private applyEvents(events: Event[]): void {
-    for (const event of events) {
-      this.applyEvent(event.data as TodoEventData)
-    }
+  private onTodoItemCreated(_state: TodoItem, data: TodoItemCreatedEventData): TodoItem {
+    return {
+      id: data.itemId,
+      listId: data.listId,
+      userId: data.userId,
+      title: data.title,
+      description: data.description,
+      priority: data.priority,
+      status: 'pending',
+      dueDate: data.dueDate,
+      tags: data.tags,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
   }
 
-  private applyEvent(data: TodoEventData): void {
-    if (isTodoItemCreatedEvent(data)) {
-      this.state = {
-        id: data.itemId,
-        listId: data.listId,
-        userId: data.userId,
-        title: data.title,
-        description: data.description,
-        priority: data.priority,
-        status: 'pending',
-        dueDate: data.dueDate,
-        tags: data.tags,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    } else if (isTodoItemUpdatedEvent(data) && this.state) {
-      // Apply updates
-      if (data.updates.title !== undefined) this.state.title = data.updates.title
-      if (data.updates.description !== undefined) this.state.description = data.updates.description
-      if (data.updates.priority !== undefined) this.state.priority = data.updates.priority
-      if (data.updates.dueDate !== undefined) this.state.dueDate = data.updates.dueDate
-      if (data.updates.tags !== undefined) this.state.tags = data.updates.tags
-      this.state.updatedAt = new Date().toISOString()
-    } else if (isTodoItemCompletedEvent(data) && this.state) {
-      this.state.status = 'completed'
-      this.state.completedAt = data.completedAt
-      this.state.updatedAt = new Date().toISOString()
-    } else if (isTodoItemDeletedEvent(data) && this.state) {
-      // Mark as deleted (soft delete)
-      this.state.status = 'cancelled'
-      this.state.updatedAt = new Date().toISOString()
-    }
+  private onTodoItemUpdated(state: TodoItem, data: TodoItemUpdatedEventData): TodoItem {
+    return {
+      ...state,
+      ...data.updates,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
-  getState(): TodoItem | null {
-    return this.state
+  private onTodoItemCompleted(state: TodoItem, data: TodoItemCompletedEventData): TodoItem {
+    return {
+      ...state,
+      status: 'completed',
+      completedAt: data.completedAt,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  private onTodoItemDeleted(state: TodoItem, _data: TodoItemDeletedEventData): TodoItem {
+    return {
+      ...state,
+      status: 'cancelled',
+      updatedAt: new Date().toISOString(),
+    };
   }
 }
 
 // Factory functions for creating aggregates from events
 export function createTodoListFromEvents(events: Event[]): TodoList | null {
-  const aggregate = new TodoListAggregate(events)
-  return aggregate.getState()
+  if (events.length === 0) return null;
+  const aggregate = new TodoListAggregate(events[0].aggregateId, events);
+  return aggregate.getState();
 }
 
 export function createTodoItemFromEvents(events: Event[]): TodoItem | null {
-  const aggregate = new TodoItemAggregate(events)
-  return aggregate.getState()
+  if (events.length === 0) return null;
+  const aggregate = new TodoItemAggregate(events[0].aggregateId, events);
+  const finalState = aggregate.getState();
+  // Don't return deleted items
+  if (finalState.status === 'cancelled') return null;
+  return finalState;
 }
 
 // Helper functions for working with aggregates
 export function getAllTodoLists(events: Event[]): TodoList[] {
-  const lists = new Map<string, Event[]>()
-
-  // Group events by list ID
-  for (const event of events) {
-    if (event.aggregateType === 'todo_list') {
-      const listId = event.aggregateId
-      if (!lists.has(listId)) {
-        lists.set(listId, [])
-      }
-      lists.get(listId)!.push(event)
-    }
-  }
-
-  // Create aggregates from event groups
-  const result: TodoList[] = []
-  for (const [listId, listEvents] of lists) {
-    const list = createTodoListFromEvents(listEvents)
-    if (list) {
-      result.push(list)
-    }
-  }
-
-  return result
+  return projectFromEvents(events, 'todo_list', (id, evts) => new TodoListAggregate(id, evts));
 }
 
 export function getAllTodoItems(events: Event[]): TodoItem[] {
-  const items = new Map<string, Event[]>()
-
-  // Group events by item ID
-  for (const event of events) {
-    if (event.aggregateType === 'todo_item') {
-      const itemId = event.aggregateId
-      if (!items.has(itemId)) {
-        items.set(itemId, [])
-      }
-      items.get(itemId)!.push(event)
-    }
-  }
-
-  // Create aggregates from event groups
-  const result: TodoItem[] = []
-  for (const [itemId, itemEvents] of items) {
-    const item = createTodoItemFromEvents(itemEvents)
-    if (item) {
-      result.push(item)
-    }
-  }
-
-  return result
+  return projectFromEvents(events, 'todo_item', (id, evts) => new TodoItemAggregate(id, evts));
 }
 
 export function getTodoItemsByList(events: Event[], listId: string): TodoItem[] {
