@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { EventStore } from '@/lib/actordb/eventstore'
-import { load } from '@/lib/actordb/config'
 import {
   createTodoListCreatedEvent,
   createTodoItemCreatedEvent,
@@ -32,18 +31,22 @@ async function getEventStore(): Promise<EventStore> {
     // Create PostgreSQL connection string from Supabase URL
     const connectionString = `postgresql://postgres:${supabaseKey}@${supabaseUrl.replace('https://', '')}:5432/postgres?sslmode=require`
 
-    const config = load({
-      eventstore: {
-        storage: {
-          type: 'postgresql',
-          connection_string: connectionString,
-          options: {}
-        },
-        snapshot_interval: 100
+    // Create config directly instead of using load function
+    const config = {
+      data_dir: './data',
+      snapshot_interval: 100,
+      retention_period: '30d',
+      compression: 'none',
+      max_concurrent_writes: 10,
+      storage: {
+        type: 'postgresql' as const,
+        connection_string: connectionString,
+        path: '',
+        options: {}
       }
-    })
+    }
 
-    eventStore = new EventStore(config.eventstore)
+    eventStore = new EventStore(config)
     await eventStore.start()
   }
   return eventStore
