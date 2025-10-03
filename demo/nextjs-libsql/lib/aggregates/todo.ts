@@ -8,7 +8,8 @@ import {
   StateHandlerMap, 
   Actor, 
   ReducerAggregate,
-  WriteResult
+  WriteResult,
+  ActorDBClient
 } from "@client/actor";
 import { client } from '../database/config';
 import { 
@@ -140,7 +141,7 @@ const todoItemHandlerMap: StateHandlerMap<TodoItemState, { state: TodoItemState;
 /**
  * The configured State-Session-ORM for TodoItem actors.
  */
-export const todoItemManager = new TypedActorManager(
+export const todoItemManager = (client: ActorDBClient) => new TypedActorManager(
   client,
   (id, events) => new ReducerAggregate(id, todoItemInitialState, todoItemReducer, events),
   (state) => state.status,

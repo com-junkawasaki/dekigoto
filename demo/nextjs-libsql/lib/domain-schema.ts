@@ -1,39 +1,60 @@
-// Merkle DAG: app_schema -> domain_definition_aggregation
-// This file aggregates all domain definitions (aggregates, commands, queries)
-// to configure the high-level ActorDB client, similar to how a schema is
-// defined for a database ORM.
+// Merkle DAG: app_schema -> secure_declarative_domain_definition
+// This file is the Single Source of Truth for the entire domain, including
+// state, commands, queries, and security capabilities.
 
 import { ReducerAggregate } from '@client/actor';
-import { todoItemReducer, todoItemInitialState, todoItemManager } from './aggregates/todo';
+import { todoItemReducer, todoItemInitialState, todoItemManager, TodoItemState } from './aggregates/todo';
+import { CompleteTodoItemCommand, CreateTodoItemCommand } from './application/use-cases';
 
-import {
-  CompleteTodoItemCommand,
-  // We will add more commands here, e.g., CreateTodoItemCommand
-} from './application/use-cases';
+// --- Query Definitions ---
+export const queries = {
+  todosByList: {
+    // zod schema for input validation
+    // input: z.object({ listId: z.string() }), 
+    handler: async (input: { listId: string }): Promise<TodoItemState[]> => {
+      // In a real implementation, this would fetch events and project them.
+      console.log(`Fetching todos for list: ${input.listId}`);
+      return []; 
+    }
+  }
+};
 
+// --- Capability Definitions ---
+const USER_CAPABILITIES = {
+  canDispatch: [
+    'todoItem.create',
+    'todoItem.complete',
+    'todoItem.update',
+    'todoItem.delete',
+  ],
+  canExecute: [
+    'todosByList',
+  ],
+};
+
+const GUEST_CAPABILITIES = {
+  canDispatch: [],
+  canExecute: ['todosByList'], // Guests can perhaps view public lists
+};
+
+// --- App Schema ---
 export const appSchema = {
   aggregates: {
     todoItem: {
-      // Instead of a class, we provide the config for the generic ReducerAggregate
       aggregateFactory: (id: string, events: any[]) =>
         new ReducerAggregate(id, todoItemInitialState, todoItemReducer, events),
       manager: todoItemManager,
     },
-    // todoList: { ... }
   },
   commands: {
-    'todoItem.complete': {
-      commandClass: CompleteTodoItemCommand,
-    },
-    // 'todoItem.create': { ... }
+    'todoItem.create': CreateTodoItemCommand,
+    'todoItem.complete': CompleteTodoItemCommand,
   },
-  queries: {
-    // 'todo.getAll': { ... }
-  },
-  projections: {
-    // 'allTodos': { ... }
-  },
+  queries,
+  capabilities: {
+    user: USER_CAPABILITIES,
+    guest: GUEST_CAPABILITIES,
+  }
 };
 
-// This type helps infer all possible actor and command names for type safety
 export type AppSchema = typeof appSchema;

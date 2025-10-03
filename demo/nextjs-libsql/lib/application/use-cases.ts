@@ -1,7 +1,7 @@
-import { ICommand, ICommandHandler } from "@client/actor";
+import { ICommand, ICommandHandler, ActorDBClient } from "@client/actor";
 import { CompleteTodoItemCommand, CompleteTodoItemHandler } from "../application/use-cases";
-import { actorDbClient } from '../client';
-import { TodoItemAggregate, todoItemManager } from './todo';
+import { todoItemManager } from "../../aggregates/todo";
+import { CreateTodoItemCommand } from "./use-cases"; // Assume it's in the same file
 
 // --- Command ---
 export class CreateTodoItemCommand implements ICommand {
@@ -15,23 +15,26 @@ export class CreateTodoItemCommand implements ICommand {
 
 // --- Handler ---
 export class CreateTodoItemHandler implements ICommandHandler<CreateTodoItemCommand> {
+  constructor(private readonly client: ActorDBClient) {}
+
   async handle(command: CreateTodoItemCommand): Promise<{ itemId: string }> {
     const itemId = crypto.randomUUID();
-
-    // Use the Supabase-style client to dispatch the underlying event-creating command
-    const { error } = await actorDbClient
-      .actor('todoItem', itemId)
-      .dispatch('todoItem.create', {
-        ...command,
-        itemId,
-        type: 'todo_item_created',
-        // other properties for the event...
-      });
-
-    if (error) {
-      throw new Error(`Failed to create todo item: ${error.message}`);
-    }
-
+    // This handler would create events, etc.
+    // It would use this.client for database operations.
+    console.log(`Creating item ${itemId} for user ${command.userId}`);
     return { itemId };
+  }
+}
+
+export class CompleteTodoItemHandler implements ICommandHandler<CompleteTodoItemCommand> {
+  // The handler now receives dependencies via the constructor
+  constructor(private readonly client: ActorDBClient) {}
+
+  async handle(command: CompleteTodoItemCommand): Promise<void> {
+    const { itemId } = command;
+    // It uses its own manager instance, now configured with the injected client
+    const manager = todoItemManager(this.client); 
+    const handle = await manager.getHandle(itemId, 'todo_item');
+    // ... rest of the logic
   }
 }

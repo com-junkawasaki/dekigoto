@@ -1,15 +1,19 @@
-// Merkle DAG: client_entrypoint -> framework_bootstrapper_instantiation
-// This file is the single entry point for configuring and creating the high-level
-// application client using the ApplicationBuilder.
+// Merkle DAG: app_bootstrap -> dynamic_secure_client_generation
+// This file is responsible for bootstrapping the application's core components
+// that are used to generate a secure, per-request client instance.
 
 import { ApplicationBuilder } from "@client/actor";
 import { appSchema } from "./domain-schema";
-import { CompleteTodoItemCommand, CompleteTodoItemHandler } from "./application/use-cases";
+import { 
+  CompleteTodoItemCommand, 
+  CompleteTodoItemHandler,
+  CreateTodoItemCommand,
+  CreateTodoItemHandler
+} from "./application/use-cases";
 import { ActorDBClient } from "@client/client";
 import { LibSQLDB } from "@client/database/libsql";
 
-// --- Database Configuration ---
-// This would typically come from environment variables.
+// --- Low-Level Client (Singleton) ---
 const dbConfig = {
   url: process.env.LIBSQL_URL || 'file:actordb.db',
   authToken: process.env.LIBSQL_AUTH_TOKEN,
@@ -17,12 +21,10 @@ const dbConfig = {
 const db = new LibSQLDB(dbConfig);
 export const lowLevelClient = new ActorDBClient(db);
 
-
-// --- Application Bootstrapping ---
-
-export const actorDbClient = new ApplicationBuilder(appSchema)
-  // Register all command handlers declaratively
-  .addCommandHandler(CompleteTodoItemCommand, new CompleteTodoItemHandler())
-  // .addCommandHandler(CreateTodoItemCommand, new CreateTodoItemHandler())
-  // .addQueryHandler(...)
-  .build();
+// --- Command Bus (Singleton) ---
+// The bus is configured once at startup with all possible handlers.
+const builder = new ApplicationBuilder(appSchema)
+  .addCommandHandler(CompleteTodoItemCommand, new CompleteTodoItemHandler(lowLevelClient))
+  .addCommandHandler(CreateTodoItemCommand, new CreateTodoItemHandler(lowLevelClient));
+  
+export const commandBus = builder.getBus(); // A new method to get the bus from the builder

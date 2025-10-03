@@ -200,6 +200,60 @@ export class ApplicationBuilder<TSchema extends AnySchema> {
     const client = new SupabaseStyleClient(this.schema, bus);
     return client;
   }
+
+  getBus(): CommandBus {
+    return new CommandBus(this.commandHandlerMap, this.queryHandlerMap);
+  }
+}
+
+// Merkle DAG: secure_client_factory -> capability_aware_api_generation
+// This is the new, primary entry point for creating a client. It reads the
+// domain schema and a user's role to dynamically construct a client that
+// ONLY exposes the actions (commands and queries) permitted for that role.
+
+type AnySecureSchema = {
+  commands: Record<string, any>;
+  queries: Record<string, { handler: (...args: any) => any }>;
+  capabilities: Record<string, { canDispatch: string[], canExecute: string[] }>;
+};
+
+type GetHandlerArgs<T> = T extends (args: infer A) => any ? A : never;
+type GetHandlerResult<T> = T extends (...args: any) => Promise<infer R> ? R : never;
+
+export function createSecureClient<TSchema extends AnySecureSchema>(
+  schema: TSchema,
+  bus: CommandBus,
+  role: keyof TSchema['capabilities']
+) {
+  const capabilities = schema.capabilities[role];
+  if (!capabilities) {
+    throw new Error(`Role "${String(role)}" not defined in schema`);
+  }
+
+  const queryProxy = new Proxy({}, {
+    get(_target, prop: string) {
+      if (!capabilities.canExecute.includes(prop)) {
+        throw new Error(`Role "${String(role)}" is not authorized to execute query "${prop}"`);
+      }
+      const queryDef = schema.queries[prop];
+      if (!queryDef) {
+        throw new Error(`Query "${prop}" not defined in schema`);
+      }
+      // This is a simplified version of query execution
+      return (args: any) => queryDef.handler(args);
+    }
+  });
+
+  const client = {
+    query: queryProxy as {
+      [K in (typeof capabilities)['canExecute'][number]]: 
+        (args: GetHandlerArgs<TSchema['queries'][K]['handler']>) => 
+          Promise<{ data: GetHandlerResult<TSchema['queries'][K]['handler']>, error: null } | { data: null, error: Error }>
+    }
+    // `actor` dispatch logic can be proxied in a similar way
+  };
+
+  return client;
 }
 
 
