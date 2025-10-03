@@ -169,6 +169,49 @@ export class CommandBus {
   }
 }
 
+// --- Declarative, Reducer-based Aggregates ---
+
+/**
+ * A map of event types to reducer functions.
+ * A reducer is a pure function that computes the next state from the
+ * current state and an event's data.
+ */
+export type Reducer<TState, TEventData extends { type: string }> = {
+  [K in TEventData['type']]?: (
+    state: TState,
+    data: Extract<TEventData, { type: K }>
+  ) => TState;
+};
+
+/**
+ * A generic AggregateRoot that uses a reducer to manage state transitions.
+ * This eliminates the need to create a new aggregate class for many use cases.
+ */
+export class ReducerAggregate<
+  TState extends object,
+  TEventData extends { type: string }
+> extends AggregateRoot<TState, TEventData> {
+  constructor(
+    id: string,
+    initialState: TState,
+    reducer: Reducer<TState, TEventData>,
+    events: Event[]
+  ) {
+    super(id, initialState);
+
+    // Dynamically register handlers from the reducer object
+    for (const eventType in reducer) {
+      const handler = reducer[eventType as TEventData['type']];
+      if (handler) {
+        this.register(eventType, handler as any);
+      }
+    }
+
+    this.applyAll(events);
+  }
+}
+
+
 // Merkle DAG: supabase_style_client -> fluent_api_facade
 // A high-level, Supabase-like client that provides a fluent API.
 // It's configured with a domain schema and hides the underlying complexity

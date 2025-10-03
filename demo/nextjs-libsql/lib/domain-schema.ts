@@ -3,10 +3,9 @@
 // to configure the high-level ActorDB client, similar to how a schema is
 // defined for a database ORM.
 
-import {
-  TodoItemAggregate,
-  todoItemManager, // We'll still use the manager for some internal logic
-} from './aggregates/todo-aggregate';
+import { ReducerAggregate } from '@client/actor';
+import { todoItemReducer, todoItemInitialState } from './aggregates/todo-reducer';
+import { todoItemManager } from './aggregates/todo-manager'; // We will create this
 
 import {
   CompleteTodoItemCommand,
@@ -16,7 +15,9 @@ import {
 export const appSchema = {
   aggregates: {
     todoItem: {
-      aggregateClass: TodoItemAggregate,
+      // Instead of a class, we provide the config for the generic ReducerAggregate
+      aggregateFactory: (id: string, events: any[]) =>
+        new ReducerAggregate(id, todoItemInitialState, todoItemReducer, events),
       manager: todoItemManager,
     },
     // todoList: { ... }
