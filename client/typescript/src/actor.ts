@@ -135,8 +135,10 @@ export interface IQueryHandler<TQuery extends IQuery<TResult>, TResult> {
 }
 
 export class CommandBus {
-  private commandHandlers = new Map<string, ICommandHandler<any, any>>();
-  private queryHandlers = new Map<string, IQueryHandler<any, any>>();
+  constructor(
+    private readonly commandHandlers = new Map<string, ICommandHandler<any, any>>(),
+    private readonly queryHandlers = new Map<string, IQueryHandler<any, any>>()
+  ) {}
 
   registerCommandHandler<TCommand extends ICommand, TResult>(
     type: TCommand['type'],
@@ -168,6 +170,38 @@ export class CommandBus {
     return handler.handle(query);
   }
 }
+
+// Merkle DAG: application_builder -> framework_bootstrapper
+// This builder provides a fluent API to configure and bootstrap the application,
+// abstracting away the manual setup of command buses and clients.
+export class ApplicationBuilder<TSchema extends AnySchema> {
+  private commandHandlerMap: Map<string, ICommandHandler<any, any>> = new Map();
+  private queryHandlerMap: Map<string, IQueryHandler<any, any>> = new Map();
+  private schema: TSchema;
+
+  constructor(schema: TSchema) {
+    this.schema = schema;
+  }
+
+  addCommandHandler<TCommand extends ICommand, TResult>(
+    commandClass: new (...args: any[]) => TCommand,
+    handlerInstance: ICommandHandler<TCommand, TResult>
+  ): this {
+    // Instantiate a dummy command to get its type string via its `type` property
+    const commandType = (new commandClass()).type;
+    this.commandHandlerMap.set(commandType, handlerInstance);
+    return this;
+  }
+  
+  // addQueryHandler(...) can be implemented similarly
+
+  build(): SupabaseStyleClient<TSchema> {
+    const bus = new CommandBus(this.commandHandlerMap, this.queryHandlerMap);
+    const client = new SupabaseStyleClient(this.schema, bus);
+    return client;
+  }
+}
+
 
 // --- Declarative, Reducer-based Aggregates ---
 
@@ -226,7 +260,7 @@ type ActorName<S extends AnySchema> = keyof S['aggregates'];
 type CommandName<S extends AnySchema> = keyof S['commands'];
 
 // Helper to extract constructor parameters, skipping the first one (usually the type string)
-type CommandPayload<T> = T extends new (type: any, ...args: infer P) => any ? P : never;
+type CommandPayload<T> = T extends new (...args: infer P) => any ? P : never;
 
 
 export class SupabaseStyleClient<TSchema extends AnySchema> {
@@ -262,8 +296,7 @@ export class SupabaseStyleClient<TSchema extends AnySchema> {
           throw new Error(`Unknown command: ${String(commandName)}`);
         }
 
-        // The first argument to the command constructor is the ID, by convention.
-        const command = new commandConfig.commandClass(id, ...payload);
+        const command = new commandConfig.commandClass(...payload);
 
         try {
           await this.bus.send(command);

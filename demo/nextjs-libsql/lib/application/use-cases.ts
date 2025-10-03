@@ -1,32 +1,37 @@
 import { ICommand, ICommandHandler } from "@client/actor";
-import { todoItemManager } from "../../aggregates/todo";
+import { CompleteTodoItemCommand, CompleteTodoItemHandler } from "../application/use-cases";
+import { actorDbClient } from '../client';
+import { TodoItemAggregate, todoItemManager } from './todo';
 
 // --- Command ---
-export class CompleteTodoItemCommand implements ICommand {
-  readonly type = 'CompleteTodoItem';
-  constructor(public readonly itemId: string) {}
+export class CreateTodoItemCommand implements ICommand {
+  readonly type = 'CreateTodoItem';
+  constructor(
+    public readonly listId: string,
+    public readonly title: string,
+    public readonly userId: string
+  ) {}
 }
 
 // --- Handler ---
-export class CompleteTodoItemHandler implements ICommandHandler<CompleteTodoItemCommand> {
-  async handle(command: CompleteTodoItemCommand): Promise<void> {
-    const { itemId } = command;
+export class CreateTodoItemHandler implements ICommandHandler<CreateTodoItemCommand> {
+  async handle(command: CreateTodoItemCommand): Promise<{ itemId: string }> {
+    const itemId = crypto.randomUUID();
 
-    const handle = await todoItemManager.getHandle(itemId, 'todo_item');
+    // Use the Supabase-style client to dispatch the underlying event-creating command
+    const { error } = await actorDbClient
+      .actor('todoItem', itemId)
+      .dispatch('todoItem.create', {
+        ...command,
+        itemId,
+        type: 'todo_item_created',
+        // other properties for the event...
+      });
 
-    if (!handle) {
-      throw new Error(`Todo item with ID ${itemId} not found.`);
+    if (error) {
+      throw new Error(`Failed to create todo item: ${error.message}`);
     }
 
-    // This is where the business process orchestration now lives.
-    // The UI layer no longer needs to know about these state checks.
-    if (handle.state.status === 'pending' || handle.state.status === 'in_progress') {
-      await handle.complete();
-    } else if (handle.state.status === 'completed') {
-      // It's already completed, so we can just ignore.
-      console.log(`Item ${itemId} is already completed.`);
-    } else {
-      throw new Error(`Cannot complete a todo item in state: ${handle.state.status}`);
-    }
+    return { itemId };
   }
 }

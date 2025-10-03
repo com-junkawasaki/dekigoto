@@ -1,10 +1,28 @@
-// Merkle DAG: client_entrypoint -> schema_driven_client_instantiation
-// This file creates and exports the single, high-level client for the application,
-// configured with the domain schema and the command bus.
+// Merkle DAG: client_entrypoint -> framework_bootstrapper_instantiation
+// This file is the single entry point for configuring and creating the high-level
+// application client using the ApplicationBuilder.
 
-import { SupabaseStyleClient } from "@client/actor";
+import { ApplicationBuilder } from "@client/actor";
 import { appSchema } from "./domain-schema";
-import { commandBus } from "./application/bus";
+import { CompleteTodoItemCommand, CompleteTodoItemHandler } from "./application/use-cases";
+import { ActorDBClient } from "@client/client";
+import { LibSQLDB } from "@client/database/libsql";
 
-// The type parameter `typeof appSchema` provides strong type safety to the client.
-export const actorDbClient = new SupabaseStyleClient(appSchema, commandBus);
+// --- Database Configuration ---
+// This would typically come from environment variables.
+const dbConfig = {
+  url: process.env.LIBSQL_URL || 'file:actordb.db',
+  authToken: process.env.LIBSQL_AUTH_TOKEN,
+};
+const db = new LibSQLDB(dbConfig);
+export const lowLevelClient = new ActorDBClient(db);
+
+
+// --- Application Bootstrapping ---
+
+export const actorDbClient = new ApplicationBuilder(appSchema)
+  // Register all command handlers declaratively
+  .addCommandHandler(CompleteTodoItemCommand, new CompleteTodoItemHandler())
+  // .addCommandHandler(CreateTodoItemCommand, new CreateTodoItemHandler())
+  // .addQueryHandler(...)
+  .build();
