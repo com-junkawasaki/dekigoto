@@ -116,6 +116,60 @@ export function projectFromEvents<S extends object, E extends Event>(
   return result;
 }
 
+// --- CQRS & Mediator Pattern ---
+
+export interface ICommand {
+  readonly type: string;
+}
+
+export interface IQuery<TResult> {
+  readonly type: string;
+}
+
+export interface ICommandHandler<TCommand extends ICommand, TResult = void> {
+  handle(command: TCommand): Promise<TResult>;
+}
+
+export interface IQueryHandler<TQuery extends IQuery<TResult>, TResult> {
+  handle(query: TQuery): Promise<TResult>;
+}
+
+export class CommandBus {
+  private commandHandlers = new Map<string, ICommandHandler<any, any>>();
+  private queryHandlers = new Map<string, IQueryHandler<any, any>>();
+
+  registerCommandHandler<TCommand extends ICommand, TResult>(
+    type: TCommand['type'],
+    handler: ICommandHandler<TCommand, TResult>
+  ) {
+    this.commandHandlers.set(type, handler);
+  }
+
+  registerQueryHandler<TQuery extends IQuery<TResult>, TResult>(
+    type: TQuery['type'],
+    handler: IQueryHandler<TQuery, TResult>
+  ) {
+    this.queryHandlers.set(type, handler);
+  }
+
+  async send<TCommand extends ICommand, TResult = void>(command: TCommand): Promise<TResult> {
+    const handler = this.commandHandlers.get(command.type);
+    if (!handler) {
+      throw new Error(`No command handler registered for type: ${command.type}`);
+    }
+    return handler.handle(command);
+  }
+
+  async query<TQuery extends IQuery<TResult>, TResult>(query: TQuery): Promise<TResult> {
+    const handler = this.queryHandlers.get(query.type);
+    if (!handler) {
+      throw new Error(`No query handler registered for type: ${query.type}`);
+    }
+    return handler.handle(query);
+  }
+}
+
+
 // Merkle DAG: typed_actor_manager -> state_session_orm
 // A generic manager that acts as a State-Session-ORM for actors.
 // It takes an aggregate's definition and provides type-safe handles
