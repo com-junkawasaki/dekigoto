@@ -37,6 +37,46 @@ export abstract class AggregateRoot<S extends object, EData extends { type: stri
 }
 
 /**
+ * A factory for creating event objects consistently.
+ */
+export class EventFactory<TEventData extends { type: string }> {
+  private aggregateType: string;
+  private idExtractor: (data: TEventData) => string;
+  private metadataExtractor: (data: TEventData) => Record<string, any>;
+
+  constructor(
+    aggregateType: string,
+    idExtractor: (data: TEventData) => string,
+    metadataExtractor: (data: TEventData) => Record<string, any> = () => ({})
+  ) {
+    this.aggregateType = aggregateType;
+    this.idExtractor = idExtractor;
+    this.metadataExtractor = metadataExtractor;
+  }
+
+  /**
+   * Creates a new event object.
+   * @param data The event-specific data payload.
+   * @param sequence The sequence number (optional, defaults to 1 as a placeholder).
+   */
+  public create(data: TEventData, sequence: number = 1): Event {
+    const baseMetadata = { eventVersion: '1.0' };
+    const customMetadata = this.metadataExtractor(data);
+
+    return {
+      aggregateId: this.idExtractor(data),
+      aggregateType: this.aggregateType,
+      sequence,
+      eventType: data.type,
+      data,
+      timestamp: new Date(),
+      eventTime: new Date(),
+      metadata: { ...baseMetadata, ...customMetadata },
+    };
+  }
+}
+
+/**
  * Projects a list of states from a stream of events.
  *
  * @param events The stream of events.

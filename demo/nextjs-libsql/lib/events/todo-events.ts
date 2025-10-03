@@ -2,6 +2,7 @@
 // Event definitions for TODO application with event sourcing
 
 import { Event } from '../actordb/eventstore'
+import { EventFactory } from '../../../../client/typescript/src/actor';
 
 // Base event interface for TODO events
 export interface TodoEvent extends Omit<Event, 'data'> {
@@ -15,6 +16,34 @@ export type TodoEventData =
   | TodoItemUpdatedEventData
   | TodoItemCompletedEventData
   | TodoItemDeletedEventData
+
+const todoListEventFactory = new EventFactory<TodoListCreatedEventData>(
+  'todo_list',
+  (data) => data.listId,
+  (data) => ({ userId: data.userId })
+);
+
+type TodoItemEventWithId = (
+  | TodoItemCreatedEventData
+  | TodoItemUpdatedEventData
+  | TodoItemCompletedEventData
+  | TodoItemDeletedEventData
+) & { itemId: string };
+
+const todoItemEventFactory = new EventFactory<TodoItemEventWithId>(
+  'todo_item',
+  (data) => data.itemId,
+  (data) => {
+    const metadata: Record<string, any> = {};
+    if ('userId' in data && typeof data.userId === 'string') {
+      metadata.userId = data.userId;
+    }
+    if ('listId' in data && typeof data.listId === 'string') {
+      metadata.listId = data.listId;
+    }
+    return metadata;
+  }
+);
 
 // Event data types
 export interface TodoListCreatedEventData {
@@ -64,36 +93,11 @@ export interface TodoItemDeletedEventData {
 
 // Event creation helpers
 export function createTodoListCreatedEvent(data: TodoListCreatedEventData): TodoEvent {
-  return {
-    aggregateId: data.listId,
-    aggregateType: 'todo_list',
-    sequence: 1, // This will be set by the event store
-    eventType: 'todo_list_created',
-    data,
-    timestamp: new Date(),
-    eventTime: new Date(),
-    metadata: {
-      userId: data.userId,
-      eventVersion: '1.0'
-    }
-  }
+  return todoListEventFactory.create(data, 1) as TodoEvent;
 }
 
 export function createTodoItemCreatedEvent(data: TodoItemCreatedEventData): TodoEvent {
-  return {
-    aggregateId: data.itemId,
-    aggregateType: 'todo_item',
-    sequence: 1, // This will be set by the event store
-    eventType: 'todo_item_created',
-    data,
-    timestamp: new Date(),
-    eventTime: new Date(),
-    metadata: {
-      userId: data.userId,
-      listId: data.listId,
-      eventVersion: '1.0'
-    }
-  }
+  return todoItemEventFactory.create(data, 1) as TodoEvent;
 }
 
 export function createTodoItemUpdatedEvent(
@@ -101,59 +105,29 @@ export function createTodoItemUpdatedEvent(
   sequence: number,
   updates: TodoItemUpdatedEventData['updates']
 ): TodoEvent {
-  return {
-    aggregateId: itemId,
-    aggregateType: 'todo_item',
-    sequence: sequence + 1,
-    eventType: 'todo_item_updated',
-    data: {
-      type: 'todo_item_updated',
-      itemId,
-      updates
-    },
-    timestamp: new Date(),
-    eventTime: new Date(),
-    metadata: {
-      eventVersion: '1.0'
-    }
-  }
+  const data: TodoItemUpdatedEventData = {
+    type: 'todo_item_updated',
+    itemId,
+    updates,
+  };
+  return todoItemEventFactory.create(data, sequence + 1) as TodoEvent;
 }
 
 export function createTodoItemCompletedEvent(itemId: string, sequence: number): TodoEvent {
-  return {
-    aggregateId: itemId,
-    aggregateType: 'todo_item',
-    sequence: sequence + 1,
-    eventType: 'todo_item_completed',
-    data: {
-      type: 'todo_item_completed',
-      itemId,
-      completedAt: new Date().toISOString()
-    },
-    timestamp: new Date(),
-    eventTime: new Date(),
-    metadata: {
-      eventVersion: '1.0'
-    }
-  }
+  const data: TodoItemCompletedEventData = {
+    type: 'todo_item_completed',
+    itemId,
+    completedAt: new Date().toISOString(),
+  };
+  return todoItemEventFactory.create(data, sequence + 1) as TodoEvent;
 }
 
 export function createTodoItemDeletedEvent(itemId: string, sequence: number): TodoEvent {
-  return {
-    aggregateId: itemId,
-    aggregateType: 'todo_item',
-    sequence: sequence + 1,
-    eventType: 'todo_item_deleted',
-    data: {
-      type: 'todo_item_deleted',
-      itemId
-    },
-    timestamp: new Date(),
-    eventTime: new Date(),
-    metadata: {
-      eventVersion: '1.0'
-    }
-  }
+  const data: TodoItemDeletedEventData = {
+    type: 'todo_item_deleted',
+    itemId,
+  };
+  return todoItemEventFactory.create(data, sequence + 1) as TodoEvent;
 }
 
 // Type guards for event data
