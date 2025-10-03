@@ -144,8 +144,22 @@
     }
   },
 
+  // Example Applications (Integration Nodes)
+  examples: {
+    nextjs_supabase: {
+      id: 'nextjs_supabase_example',
+      description: 'Next.js + Supabase authentication example with DAG routing',
+      dependencies: ['security_gateway', 'query_interface'],
+      outputs: ['authentication_flow', 'protected_routes'],
+      security: 'middleware_protected',
+      framework: 'nextjs_15_app_router',
+      authentication: 'supabase_ssr_phi_routing',
+      merkle_hash: 'sha256:nextjs_supabase_example_v1'
+    }
+  },
+
   // Version and Merkle Root
-  version: '1.0.0',
-  merkle_root: 'sha256:actordb_dag_v1_root',
-  last_updated: '2025-09-29'
+  version: '1.0.1',
+  merkle_root: 'sha256:actordb_dag_v1_with_examples_root',
+  last_updated: '2025-10-03'
 }
