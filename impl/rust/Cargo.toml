@@ -27,7 +27,7 @@ hyper = "0.14"
 tower = "0.4"
 
 # Security
-jsonwebtoken = "8.3"
+jsonwebtoken = "10.3"
 rustls = "0.21"
 rustls-pemfile = "1.0"
 
