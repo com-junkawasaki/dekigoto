@@ -11,7 +11,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "js-yaml": "^4.3.0",
+    "js-yaml": "^4.3.1",
     "jsonwebtoken": "^9.0.2",
     "express": "^4.22.2",
     "cors": "^2.8.5",
@@ -32,8 +32,8 @@
     "@types/js-yaml": "^4.0.9",
     "typescript": "^5.3.3",
     "ts-node": "^10.9.2",
-    "jest": "^29.7.0",
-    "@types/jest": "^29.5.11"
+    "jest": "^30.4.2",
+    "@types/jest": "^30.0.0"
   },
   "keywords": [
     "actordb",
